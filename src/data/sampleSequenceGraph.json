@@ -1,0 +1,108 @@
+{
+  "hotelName": "L'Aura Palace & Royal Sanctuary",
+  "version": "1.0.0",
+  "initialNodeId": "env-gate",
+  "nodes": [
+    {
+      "id": "env-gate",
+      "title": "The Cypress Portal & Arrival Court",
+      "slug": "arrival-court",
+      "category": "Arrival",
+      "description": "Cross the obsidian stone reflecting promenade into the majestic bronze archways.",
+      "ambientLoop": {
+        "desktopUrl": "https://assets.mixkit.co/videos/preview/mixkit-exterior-of-a-luxurious-hotel-at-night-42790-large.mp4",
+        "mobileUrl": "https://assets.mixkit.co/videos/preview/mixkit-exterior-of-a-luxurious-hotel-at-night-42790-large.mp4",
+        "posterUrl": "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1920&q=80",
+        "duration": 9.5,
+        "fps": 30
+      },
+      "audioProfile": {
+        "ambienceTone": "welcoming_strings",
+        "volume": 0.4
+      }
+    },
+    {
+      "id": "env-lobby",
+      "title": "The Grand Marble Atrium & Lobby",
+      "slug": "grand-atrium",
+      "category": "Sanctuary",
+      "description": "Cascading crystal chandeliers suspended from a 20-meter dome illuminate Italian Calacatta marble.",
+      "ambientLoop": {
+        "desktopUrl": "https://assets.mixkit.co/videos/preview/mixkit-entering-a-luxurious-hall-with-a-chandelier-42788-large.mp4",
+        "mobileUrl": "https://assets.mixkit.co/videos/preview/mixkit-entering-a-luxurious-hall-with-a-chandelier-42788-large.mp4",
+        "posterUrl": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1920&q=80",
+        "duration": 12.0,
+        "fps": 30
+      },
+      "audioProfile": {
+        "ambienceTone": "marble_hall_reverb",
+        "volume": 0.5
+      }
+    },
+    {
+      "id": "env-pool",
+      "title": "Azure Coastal Infinity Oasis",
+      "slug": "infinity-oasis",
+      "category": "Wellness",
+      "description": "Perched on clifftops overlooking the turquoise Mediterranean with submerged floating loungers.",
+      "ambientLoop": {
+        "desktopUrl": "https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-luxury-resort-with-swimming-pools-42794-large.mp4",
+        "mobileUrl": "https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-luxury-resort-with-swimming-pools-42794-large.mp4",
+        "posterUrl": "https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1920&q=80",
+        "duration": 10.2,
+        "fps": 30
+      },
+      "audioProfile": {
+        "ambienceTone": "crystal_water",
+        "volume": 0.6
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-gate-to-lobby",
+      "sourceNodeId": "env-gate",
+      "targetNodeId": "env-lobby",
+      "label": "Pass Through Bronze Gates into Grand Lobby",
+      "triggerType": "click",
+      "direction": "forward",
+      "soundCue": "door_glide_chime",
+      "transitionVideo": {
+        "desktopUrl": "https://assets.mixkit.co/videos/preview/mixkit-entering-a-luxurious-hall-with-a-chandelier-42788-large.mp4",
+        "mobileUrl": "https://assets.mixkit.co/videos/preview/mixkit-entering-a-luxurious-hall-with-a-chandelier-42788-large.mp4",
+        "duration": 4.8,
+        "fps": 30
+      }
+    },
+    {
+      "id": "edge-lobby-to-pool",
+      "sourceNodeId": "env-lobby",
+      "targetNodeId": "env-pool",
+      "label": "Step Out to the Coastal Clifftop Pool",
+      "triggerType": "click",
+      "direction": "lateral",
+      "soundCue": "water_breeze",
+      "transitionVideo": {
+        "desktopUrl": "https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-luxury-resort-with-swimming-pools-42794-large.mp4",
+        "mobileUrl": "https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-luxury-resort-with-swimming-pools-42794-large.mp4",
+        "duration": 5.2,
+        "fps": 30
+      }
+    },
+    {
+      "id": "edge-pool-to-lobby",
+      "sourceNodeId": "env-pool",
+      "targetNodeId": "env-lobby",
+      "label": "Return to the Air-Conditioned Atrium",
+      "triggerType": "click",
+      "direction": "backward",
+      "soundCue": "reverb_echo",
+      "transitionVideo": {
+        "desktopUrl": "https://assets.mixkit.co/videos/preview/mixkit-entering-a-luxurious-hall-with-a-chandelier-42788-large.mp4",
+        "mobileUrl": "https://assets.mixkit.co/videos/preview/mixkit-entering-a-luxurious-hall-with-a-chandelier-42788-large.mp4",
+        "duration": 4.5,
+        "fps": 30
+      }
+    }
+  ]
+}

@@ -1,0 +1,386 @@
+{
+  "hotelName": "هتل قصر لورا",
+  "tagline": "پناهگاهی باشکوه از هنر، معماری و آرامش پنج ستاره",
+  "version": "2.4.0",
+  "initialNodeId": "gate",
+  "nodes": [
+    {
+      "id": "gate",
+      "slug": "grand-entrance",
+      "title": "درگاه ورودی و حیاط سروهای کهن",
+      "subtitle": "آغاز تجربه‌ای سرشار از شکوه و آرامش",
+      "category": "ورود به قصر",
+      "description": "گام نهادن بر گذرگاه سنگ‌های آتشفشانی و عبور از زیر طاق‌های برنزی باشکوه، رو به تالار سلطنتی و چشم‌انداز آرام‌بخش سواحل مدیترانه.",
+      "ambientLoop": {
+        "landscapeUrl": "https://assets.mixkit.co/videos/42790/42790-720.mp4",
+        "portraitUrl": "https://assets.mixkit.co/videos/42790/42790-720.mp4",
+        "posterUrl": "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1920&q=80",
+        "duration": 9.5,
+        "fps": 30
+      },
+      "transitions": [
+        {
+          "targetNodeId": "lobby",
+          "label": "ورود به تالار و لابی مجلل قصر",
+          "triggerType": "click",
+          "direction": "forward",
+          "soundCue": "door_glide_chime",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42788/42788-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42788/42788-720.mp4",
+            "duration": 4.8,
+            "fps": 30
+          }
+        },
+        {
+          "targetNodeId": "dining",
+          "label": "بازگشت به ضیافت شام و رستوران قصر",
+          "triggerType": "click",
+          "direction": "backward",
+          "soundCue": "cutlery_chime",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42789/42789-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42789/42789-720.mp4",
+            "duration": 4.5,
+            "fps": 30
+          }
+        },
+        {
+          "targetNodeId": "pool",
+          "label": "گذر به واحه و استخر ساحلی بیکران",
+          "triggerType": "click",
+          "direction": "lateral",
+          "soundCue": "water_breeze",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42794/42794-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42794/42794-720.mp4",
+            "duration": 5.2,
+            "fps": 30
+          }
+        }
+      ],
+      "hotspots": [
+        {
+          "id": "gate-portal",
+          "x": 50,
+          "y": 62,
+          "title": "سرویس پیشواز و ترانسفر تشریفاتی",
+          "tagline": "استقبال اختصاصی",
+          "description": "ناوگان اختصاصی اتومبیل‌های لوکس تشریفاتی و پیشواز توسط سرپیشخدمت قصر.",
+          "icon": "Car",
+          "action": {
+            "type": "navigate",
+            "targetNodeId": "lobby"
+          }
+        },
+        {
+          "id": "gate-fountain",
+          "x": 22,
+          "y": 74,
+          "title": "حوضچه آیینه‌ای و آبنمای آرامش",
+          "tagline": "نوای زلال آب",
+          "description": "آبنمای سنگ بازالت با گردش طبیعی آب زلال کوهستان و نورپردازی کهربایی شبانه.",
+          "icon": "Droplets",
+          "action": {
+            "type": "modal",
+            "details": {
+              "badge": "یادمان معماری قصر",
+              "specs": [
+                { "label": "جنس سنگ", "value": "بازالت سیاه صیقلی" },
+                { "label": "طنین آکوستیک", "value": "فرکانس آرامش‌بخش ۴۳۲ هرتز" }
+              ]
+            }
+          }
+        }
+      ],
+      "amenities": ["استقبال تشریفاتی", "پد هلیکوپتر اختصاصی", "حمل ویژه توشه و چمدان", "سرویس سرپیشخدمت ۲۴ ساعته"],
+      "audioProfile": {
+        "tone": "welcoming_strings",
+        "volume": 0.65
+      }
+    },
+    {
+      "id": "lobby",
+      "slug": "grand-atrium-lobby",
+      "title": "تالار بزرگ و لابی مرمرین",
+      "subtitle": "معماری باشکوه با چلچراغ‌های کریستال مورانو",
+      "category": "تالار مرکزی",
+      "description": "گنبد باشکوه به ارتفاع بیست متر، کف‌پوش سنگ مرمر کالاکاتای طلایی و آب‌نماهای آرام‌بخش دیواری، فضایی اشرافی برای پذیرایی خلق کرده‌اند.",
+      "ambientLoop": {
+        "landscapeUrl": "https://assets.mixkit.co/videos/42791/42791-720.mp4",
+        "portraitUrl": "https://assets.mixkit.co/videos/42791/42791-720.mp4",
+        "posterUrl": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1920&q=80",
+        "duration": 8.0,
+        "fps": 30
+      },
+      "transitions": [
+        {
+          "targetNodeId": "suite",
+          "label": "صعود با آسانسور شیشه‌ای به سوئیت پنت‌هاوس",
+          "triggerType": "click",
+          "direction": "ascend",
+          "soundCue": "elevator_ascend",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42792/42792-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42792/42792-720.mp4",
+            "duration": 6.1,
+            "fps": 30
+          }
+        },
+        {
+          "targetNodeId": "dining",
+          "label": "ورود به سالن رستوران بین‌المللی",
+          "triggerType": "click",
+          "direction": "lateral",
+          "soundCue": "cutlery_chime",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42789/42789-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42789/42789-720.mp4",
+            "duration": 4.2,
+            "fps": 30
+          }
+        },
+        {
+          "targetNodeId": "gate",
+          "label": "بازگشت به درگاه ورودی قصر",
+          "triggerType": "click",
+          "direction": "backward",
+          "soundCue": "door_glide_chime",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42790/42790-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42790/42790-720.mp4",
+            "duration": 4.5,
+            "fps": 30
+          }
+        }
+      ],
+      "hotspots": [
+        {
+          "id": "lobby-chandelier",
+          "x": 48,
+          "y": 28,
+          "title": "چلچراغ کریستال دست‌ساز مورانو",
+          "tagline": "شاهکار هنری",
+          "description": "متشکل از ۳۲۰۰ قطعه کریستال دست‌ساز با ورق طلای ۲۴ عیار اثر هنرمندان ونیزی.",
+          "icon": "Sparkles",
+          "action": {
+            "type": "modal",
+            "details": {
+              "badge": "هنر دست‌ساز",
+              "specs": [
+                { "label": "وزن سازه", "value": "۱۴۰۰ کیلوگرم" },
+                { "label": "سازنده", "value": "استودیو شیشه‌گری مورانو، ونیز" }
+              ]
+            }
+          }
+        }
+      ],
+      "amenities": ["نوازندگی زنده پیانوی گرند استین‌وی", "بار چای و عطر اختصاصی", "پذیرش اختصاصی در سوئیت"],
+      "audioProfile": {
+        "tone": "marble_hall_reverb",
+        "volume": 0.55
+      }
+    },
+    {
+      "id": "suite",
+      "slug": "royal-penthouse-sanctuary",
+      "title": "سوئیت سلطنتی پنت‌هاوس",
+      "subtitle": "افق بی‌پایان آسمان و دریا در بالاترین نقطه قصر",
+      "category": "اقامتگاه سلطنتی",
+      "description": "تراس اختصاصی وسیع با جکوزی معلق مشرف به دریا، دیزاین با چوب گردوی دست‌تراش و امکانات رفاهی فوق‌العاده مدرن.",
+      "ambientLoop": {
+        "landscapeUrl": "https://assets.mixkit.co/videos/42792/42792-720.mp4",
+        "portraitUrl": "https://assets.mixkit.co/videos/42792/42792-720.mp4",
+        "posterUrl": "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1920&q=80",
+        "duration": 11.2,
+        "fps": 30
+      },
+      "transitions": [
+        {
+          "targetNodeId": "pool",
+          "label": "فرود مستقیم به استخر ساحلی",
+          "triggerType": "click",
+          "direction": "descend",
+          "soundCue": "pool_splash_distant",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42794/42794-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42794/42794-720.mp4",
+            "duration": 5.0,
+            "fps": 30
+          }
+        },
+        {
+          "targetNodeId": "lobby",
+          "label": "بازگشت به تالار و لابی مرکزی",
+          "triggerType": "click",
+          "direction": "descend",
+          "soundCue": "elevator_descend",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42791/42791-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42791/42791-720.mp4",
+            "duration": 5.4,
+            "fps": 30
+          }
+        }
+      ],
+      "hotspots": [
+        {
+          "id": "suite-jacuzzi",
+          "x": 68,
+          "y": 55,
+          "title": "جکوزی معلق مشرف به ساحل",
+          "tagline": "آب‌درمانی با عصاره‌های گیاهی",
+          "description": "آب گرم معدنی فیلتر شده با نوردرمانی و چشم‌انداز ۲۷۰ درجه از خط افق دریا.",
+          "icon": "Waves",
+          "action": {
+            "type": "modal",
+            "details": {
+              "badge": "امکانات اختصاصی سوئیت",
+              "specs": [
+                { "label": "دما", "value": "۳۸ درجه سانتیگراد تنظیم هوشمند" },
+                { "label": "سیستم صوتی", "value": "بلندگوهای مخفی ضدآب بنگ اند اولافسن" }
+              ]
+            }
+          }
+        }
+      ],
+      "amenities": ["منوی اختصاصی متکا و خواب راحت", "آشپز اختصاصی برای سرو شام در سوئیت", "تراس اختصاصی ۲۲۰ متری"],
+      "audioProfile": {
+        "tone": "ocean_breeze",
+        "volume": 0.5
+      }
+    },
+    {
+      "id": "pool",
+      "slug": "infinity-coastal-oasis",
+      "title": "استخر بیکران و واحه ساحلی",
+      "subtitle": "پیوند آب‌های زلال فیروزه‌ای با پهنه دریا",
+      "category": "تندرستی و آرامش",
+      "description": "تخت‌های معلق غوطه‌ور در آب، کابین‌های خصوصی مخملین و نسیم باطراوت اقیانوس بر فراز صخره‌های مرجانی.",
+      "ambientLoop": {
+        "landscapeUrl": "https://assets.mixkit.co/videos/42794/42794-720.mp4",
+        "portraitUrl": "https://assets.mixkit.co/videos/42794/42794-720.mp4",
+        "posterUrl": "https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1920&q=80",
+        "duration": 10.2,
+        "fps": 30
+      },
+      "transitions": [
+        {
+          "targetNodeId": "dining",
+          "label": "ورود به رستوران ساحلی آمبروزیا",
+          "triggerType": "click",
+          "direction": "lateral",
+          "soundCue": "dining_ambiance",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42789/42789-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42789/42789-720.mp4",
+            "duration": 4.6,
+            "fps": 30
+          }
+        },
+        {
+          "targetNodeId": "lobby",
+          "label": "بازگشت به فضای لابی قصر",
+          "triggerType": "click",
+          "direction": "backward",
+          "soundCue": "fountain_flow",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42788/42788-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42788/42788-720.mp4",
+            "duration": 4.8,
+            "fps": 30
+          }
+        }
+      ],
+      "hotspots": [
+        {
+          "id": "pool-bar",
+          "x": 35,
+          "y": 62,
+          "title": "بار ساحلی نوشیدنی‌های ارگانیک",
+          "tagline": "پذیرایی خنک در آب",
+          "description": "سرو آبمیوه‌های دست‌چین گرمسیری و معجون‌های خنک کننده گیاهی درون آب.",
+          "icon": "Coffee",
+          "action": {
+            "type": "navigate",
+            "targetNodeId": "dining"
+          }
+        }
+      ],
+      "amenities": ["آب شیرین تصفیه‌شده با نمک‌های دریایی", "ماساژ اختصاصی کنار استخر", "سرویس حوله‌های معطر و حوله‌گرم‌کن"],
+      "audioProfile": {
+        "tone": "crystal_water",
+        "volume": 0.6
+      }
+    },
+    {
+      "id": "dining",
+      "slug": "ambrosia-michelin-dining",
+      "title": "رستوران مجلل آمبروزیا",
+      "subtitle": "شاهکارهای آشپزی بین‌المللی با چشم‌انداز غروب طلایی",
+      "category": "ضیافت و پذیرایی",
+      "description": "ضیافتی از طعم‌های اصیل با ترکیبات فصلی مرغوب در کنار نوای دل‌انگیز ویولن و چشم‌انداز افق اقیانوس.",
+      "ambientLoop": {
+        "landscapeUrl": "https://assets.mixkit.co/videos/42789/42789-720.mp4",
+        "portraitUrl": "https://assets.mixkit.co/videos/42789/42789-720.mp4",
+        "posterUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1920&q=80",
+        "duration": 9.0,
+        "fps": 30
+      },
+      "transitions": [
+        {
+          "targetNodeId": "lobby",
+          "label": "بازگشت به لابی مرکزی قصر",
+          "triggerType": "click",
+          "direction": "lateral",
+          "soundCue": "hall_reverb",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42791/42791-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42791/42791-720.mp4",
+            "duration": 4.5,
+            "fps": 30
+          }
+        },
+        {
+          "targetNodeId": "gate",
+          "label": "قدم زدن به سمت حیاط ورودی و خروج",
+          "triggerType": "click",
+          "direction": "forward",
+          "soundCue": "night_breeze",
+          "video": {
+            "landscapeUrl": "https://assets.mixkit.co/videos/42790/42790-720.mp4",
+            "portraitUrl": "https://assets.mixkit.co/videos/42790/42790-720.mp4",
+            "duration": 5.1,
+            "fps": 30
+          }
+        }
+      ],
+      "hotspots": [
+        {
+          "id": "dining-cellar",
+          "x": 58,
+          "y": 48,
+          "title": "رزرو میز اختصاصی شام",
+          "tagline": "پذیرایی پنج ستاره",
+          "description": "امکان انتخاب منوی سفارشی و چیدمان گل‌آرایی ویژه برای مناسبت‌های عاشقانه.",
+          "icon": "Utensils",
+          "action": {
+            "type": "modal",
+            "details": {
+              "badge": "تجربه اختصاصی",
+              "specs": [
+                { "label": "کد پوشش", "value": "رسمی و شیک" },
+                { "label": "چشم‌انداز", "value": "غروب مستقیم آفتاب بر فراز دریا" }
+              ]
+            }
+          }
+        }
+      ],
+      "amenities": ["منوی فصلی بین‌المللی", "میزهای اختصاصی لژ خانوادگی", "صندلی‌های چرمی دست‌دوز ایتالیایی"],
+      "audioProfile": {
+        "tone": "restaurant_ambiance",
+        "volume": 0.5
+      }
+    }
+  ]
+}

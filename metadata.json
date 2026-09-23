@@ -1,0 +1,6 @@
+{
+  "name": "هتل قصر لورا - تجربه ویدیویی اقامتگاه لوکس",
+  "description": "تجربه تعاملی سینمایی و ویدیویی هتل پنج ستاره قصر لورا با گشت و گذار پیوسته در فضاهای مجلل.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
