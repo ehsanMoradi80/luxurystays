@@ -236,10 +236,9 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
 
   // =========================================================================
   // پیاده‌سازی فوق‌العاده حساس و پایدار سوایپ افقی (Swipe Left / Swipe Right)
-  // پشتیبانی از تاچ لمسی موبایل (با مهار touchcancel)، درگ ماوس/ترک‌پد دسکتاپ و کلیدهای جهت‌نما
-  // در زبان فارسی و چیدمان RTL:
-  // - سوایپ به چپ (Swipe Left - کشیدن انگشت/ماوس به سمت چپ): انتقال به مرحله بعد
-  // - سوایپ به راست (Swipe Right - کشیدن انگشت/ماوس به سمت راست): بازگشت به مرحله قبل
+  // پشتیبانی از تاچ لمسی موبایل (با مهار touchcancel)، درگ ماوس/ترک‌پد دسکتاپ و کلیدهای جهت‌نما:
+  // - سوایپ به راست (Swipe Right - کشیدن انگشت/ماوس به سمت راست): انتقال به مرحله بعد
+  // - سوایپ به چپ (Swipe Left - کشیدن انگشت/ماوس به سمت چپ): بازگشت به مرحله قبل
   // =========================================================================
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
@@ -250,6 +249,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
   const isPointerDownRef = useRef<boolean>(false);
   const pointerStartXRef = useRef<number | null>(null);
   const pointerStartYRef = useRef<number | null>(null);
+  const lastSwipeTimestampRef = useRef<number>(0);
 
   const isInteractiveElement = (target: EventTarget | null) => {
     if (!target || !(target instanceof HTMLElement)) return false;
@@ -258,12 +258,20 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
 
   const executeSwipe = useCallback(
     (deltaX: number) => {
+      const now = Date.now();
+      // قفل امنیتی جلوگیری از پرش دو مرحله‌ای: هر سوایپ فقط و فقط ۱ مرحله جابجا می‌شود
+      if (now - lastSwipeTimestampRef.current < 450) {
+        return;
+      }
+
       if (currentStep < 5) {
-        if (deltaX < 0) {
-          // کشیدن به چپ => مرحله بعد
+        if (deltaX > 0) {
+          // کشیدن به راست => دقیقا یک مرحله به جلو
+          lastSwipeTimestampRef.current = now;
           goToNextStep();
-        } else if (deltaX > 0) {
-          // کشیدن به راست => مرحله قبل
+        } else if (deltaX < 0) {
+          // کشیدن به چپ => دقیقا یک مرحله به عقب
+          lastSwipeTimestampRef.current = now;
           goToPrevStep();
         }
       }
@@ -294,7 +302,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
     const deltaY = endY - touchStartYRef.current;
     const deltaTime = Date.now() - touchStartTimeRef.current;
 
-    // تشخیص سوایپ افقی با آستانه حساس و سریع (حداقل ۳۵ پیکسل یا حرکت سریع زیر ۴۵۰ میلی‌ثانیه)
+    // تشخیص سوایپ افقی با آستانه حساس و سریع
     const isHorizontalDominant = Math.abs(deltaX) > Math.abs(deltaY) * 0.6;
     const hasEnoughDistance = Math.abs(deltaX) >= 35 || (Math.abs(deltaX) >= 25 && deltaTime < 350);
 
@@ -309,13 +317,6 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
   };
 
   const handleTouchCancel = () => {
-    if (touchStartXRef.current !== null && touchCurrentXRef.current !== null) {
-      const deltaX = touchCurrentXRef.current - touchStartXRef.current;
-      const deltaY = (touchCurrentYRef.current ?? touchStartYRef.current ?? 0) - (touchStartYRef.current ?? 0);
-      if (Math.abs(deltaX) >= 25 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
-        executeSwipe(deltaX);
-      }
-    }
     touchStartXRef.current = null;
     touchStartYRef.current = null;
     touchCurrentXRef.current = null;
@@ -323,6 +324,8 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    // جلوگیری از تکرار رویداد در تاچ موبایل (تاچ با touchstart مدیریت می‌شود)
+    if (e.pointerType === 'touch') return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (isInteractiveElement(e.target)) return;
     isPointerDownRef.current = true;
@@ -331,6 +334,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    if (e.pointerType === 'touch') return;
     if (!isPointerDownRef.current || pointerStartXRef.current === null) {
       isPointerDownRef.current = false;
       return;
@@ -338,7 +342,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
     const deltaX = e.clientX - pointerStartXRef.current;
     const deltaY = pointerStartYRef.current !== null ? e.clientY - pointerStartYRef.current : 0;
 
-    if (Math.abs(deltaX) >= 25 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
+    if (Math.abs(deltaX) >= 30 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
       executeSwipe(deltaX);
     }
 
@@ -347,9 +351,10 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
     pointerStartYRef.current = null;
   };
 
-  // پشتیبانی سراسری از ماوس/ترک‌پد و کلیدهای کیبورد (چپ = بعد، راست = قبل در RTL)
+  // پشتیبانی سراسری از ماوس/ترک‌پد و کلیدهای کیبورد (راست = بعد، چپ = قبل)
   useEffect(() => {
     const handleGlobalPointerUp = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') return;
       if (!isPointerDownRef.current || pointerStartXRef.current === null) {
         isPointerDownRef.current = false;
         pointerStartXRef.current = null;
@@ -359,7 +364,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
       const deltaX = e.clientX - pointerStartXRef.current;
       const deltaY = pointerStartYRef.current !== null ? e.clientY - pointerStartYRef.current : 0;
 
-      if (Math.abs(deltaX) >= 25 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
+      if (Math.abs(deltaX) >= 30 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
         executeSwipe(deltaX);
       }
 
@@ -370,9 +375,9 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isInteractiveElement(document.activeElement)) return;
-      if (e.key === 'ArrowLeft') {
+      if (e.key === 'ArrowRight') {
         goToNextStep();
-      } else if (e.key === 'ArrowRight') {
+      } else if (e.key === 'ArrowLeft') {
         goToPrevStep();
       }
     };
@@ -581,13 +586,6 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
               animate="center"
               exit="exit"
               transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              onPanEnd={(_e, info) => {
-                const deltaX = info.offset.x;
-                const deltaY = info.offset.y;
-                if (Math.abs(deltaX) >= 25 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
-                  executeSwipe(deltaX);
-                }
-              }}
               className="space-y-6 touch-pan-y select-none"
             >
               {/* =====================================================================
@@ -778,26 +776,6 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                         { value: 'مراسم خصوصی و جشن خانوادگی', label: 'مراسم خصوصی و جشن خانوادگی' },
                       ]}
                     />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-neutral-800">
-                    <button
-                      type="button"
-                      onClick={goToPrevStep}
-                      className="px-4 py-2.5 rounded-xl text-xs text-neutral-400 hover:text-white flex items-center gap-1 cursor-pointer"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                      <span>مرحله قبل</span>
-                    </button>
-
-                    <CustomButton
-                      size="lg"
-                      variant="primary"
-                      rightIcon={<ChevronLeft className="w-5 h-5" />}
-                      onClick={goToNextStep}
-                    >
-                      ادامه و خدمات کانسیرژ
-                    </CustomButton>
                   </div>
                 </div>
               )}

@@ -1210,6 +1210,7 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
 
         {/* =========================================================================
             نشانگر نوری ترنزیشن: کاملاً سینمایی و بدون هرگونه متن، بج یا توضیحات اضافی
+            در حرکت رو به جلو پر می‌شود و هنگام دنده عقب به سمت سکانس قبلی به نرمی خالی می‌شود
             ========================================================================= */}
         {status === 'TRANSITIONING' && (
           <div 
@@ -1218,7 +1219,13 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
           >
             <div 
               className="h-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 shadow-[0_0_12px_rgba(251,191,36,0.8)] transition-all duration-75"
-              style={{ width: `${Math.round(transitionProgress * 100)}%` }}
+              style={{
+                width: `${
+                  isReverseTransition
+                    ? Math.max(0, Math.min(100, Math.round((1 - transitionProgress) * 100)))
+                    : Math.max(0, Math.min(100, Math.round(transitionProgress * 100)))
+                }%`
+              }}
             />
           </div>
         )}
