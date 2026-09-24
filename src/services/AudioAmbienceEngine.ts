@@ -10,6 +10,8 @@ export class AudioAmbienceEngine {
   private masterGain: GainNode | null = null;
   private currentDroneNodes: { stop: () => void }[] = [];
   private currentVolume: number = 0.6;
+  /** Explicit Web Audio Buffer cache for procedural noise, impulse responses, and ambient tones */
+  private audioBuffers: Map<string, AudioBuffer> = new Map();
 
   public init() {
     if (this.ctx) return;
@@ -131,14 +133,18 @@ export class AudioAmbienceEngine {
   private spawnOceanNoise(targetGain: GainNode) {
     if (!this.ctx) return;
     try {
-      const bufferSize = this.ctx.sampleRate * 2;
-      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      let lastOut = 0.0;
-      for (let i = 0; i < bufferSize; i++) {
-        const white = Math.random() * 2 - 1;
-        data[i] = (lastOut + 0.02 * white) / 1.02; // Pink noise approx
-        lastOut = data[i];
+      let buffer = this.audioBuffers.get('ocean_breeze');
+      if (!buffer) {
+        const bufferSize = this.ctx.sampleRate * 2;
+        buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let lastOut = 0.0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          data[i] = (lastOut + 0.02 * white) / 1.02; // Pink noise approx
+          lastOut = data[i];
+        }
+        this.audioBuffers.set('ocean_breeze', buffer);
       }
 
       const noise = this.ctx.createBufferSource();
@@ -191,20 +197,77 @@ export class AudioAmbienceEngine {
   }
 
   /**
-   * Pre-heats the Web Audio context and warms sound synthesis parameters
+   * Pre-heats the Web Audio context and warms sound synthesis parameters / buffers
    * for adjacent nodes so switching sound profiles has zero initial latency.
    */
   public warmUpAudioProfile(tone: string) {
     if (!this.ctx) {
       this.init();
     }
-    // Pre-calculate frequencies or warm-up synthesis pipeline
     const validTones = ['warm_chords', 'marble_hall_reverb', 'ocean_breeze', 'crystal_water', 'jazz_lounge'];
     if (!validTones.includes(tone)) return;
 
     if (this.ctx && this.ctx.state === 'suspended' && !this.isMuted) {
       this.ctx.resume().catch(() => {});
     }
+
+    // Pre-allocate audio synthesis buffer in memory for this tone if needed
+    if (this.ctx && !this.audioBuffers.has(tone)) {
+      try {
+        const bufferSize = Math.floor(this.ctx.sampleRate * 1.5);
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const channelData = buffer.getChannelData(0);
+        let sampleAccumulator = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const noiseSample = Math.random() * 2 - 1;
+          sampleAccumulator = (sampleAccumulator + 0.015 * noiseSample) / 1.015;
+          channelData[i] = sampleAccumulator * 0.15;
+        }
+        this.audioBuffers.set(tone, buffer);
+      } catch {}
+    }
+  }
+
+  /**
+   * LRU Resource Lifecycle Manager:
+   * Explicitly purges audio buffers and stops synthesizers for tones corresponding to
+   * evicted nodes that are more than 2 steps away from the active index.
+   */
+  public purgeAudioBuffersForTones(tonesToEvict: string[]): { purgedCount: number; remainingCount: number } {
+    let purgedCount = 0;
+    tonesToEvict.forEach((tone) => {
+      if (this.audioBuffers.has(tone)) {
+        this.audioBuffers.delete(tone);
+        purgedCount++;
+      }
+    });
+
+    // Stop and dispose obsolete synthesis nodes to free audio memory
+    if (this.currentDroneNodes.length > 1) {
+      const obsolete = this.currentDroneNodes.slice(0, this.currentDroneNodes.length - 1);
+      obsolete.forEach((node) => node.stop());
+      this.currentDroneNodes = this.currentDroneNodes.slice(this.currentDroneNodes.length - 1);
+    }
+
+    return {
+      purgedCount,
+      remainingCount: this.audioBuffers.size,
+    };
+  }
+
+  /**
+   * Specifically unloads audio buffers and synthesizers for tones corresponding to
+   * evicted nodes that are more than 2 nodes away and not needed by any protected nodes.
+   */
+  public unloadAudioBuffersForTones(tonesToEvict: string[]) {
+    this.purgeAudioBuffersForTones(tonesToEvict);
+  }
+
+  /**
+   * Returns current count of audio buffers retained in memory
+   */
+  public getAudioBufferCount(): number {
+    return this.audioBuffers.size;
   }
 
   /**
@@ -212,12 +275,21 @@ export class AudioAmbienceEngine {
    * drone nodes or cached buffers for non-adjacent nodes during extended navigation.
    */
   public pruneNonAdjacentAudio(allowedTones: string[]) {
-    // If the audio context is active, gracefully suspend or clean up any unneeded synthesis nodes
     if (!this.ctx) return;
     
+    // Purge buffers for any tones not in allowedTones
+    const tonesToPurge: string[] = [];
+    for (const cachedTone of this.audioBuffers.keys()) {
+      if (!allowedTones.includes(cachedTone)) {
+        tonesToPurge.push(cachedTone);
+      }
+    }
+    if (tonesToPurge.length > 0) {
+      this.purgeAudioBuffersForTones(tonesToPurge);
+    }
+
     // Ensure all drone nodes other than active ones are thoroughly disposed
     if (this.currentDroneNodes.length > 2) {
-      // Retain only the most recent active drone synthesis
       const obsolete = this.currentDroneNodes.slice(0, this.currentDroneNodes.length - 1);
       obsolete.forEach((node) => node.stop());
       this.currentDroneNodes = this.currentDroneNodes.slice(this.currentDroneNodes.length - 1);
@@ -231,6 +303,7 @@ export class AudioAmbienceEngine {
 
   public destroy() {
     this.stopCurrentDrones();
+    this.audioBuffers.clear();
     if (this.ctx) {
       this.ctx.close();
       this.ctx = null;

@@ -1,10 +1,11 @@
 {
   "hotelName": "L'Aura Palace & Royal Sanctuary",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "initialNodeId": "env-gate",
   "nodes": [
     {
       "id": "env-gate",
+      "type": "environmentNode",
       "title": "The Cypress Portal & Arrival Court",
       "slug": "arrival-court",
       "category": "Arrival",
@@ -23,6 +24,7 @@
     },
     {
       "id": "env-lobby",
+      "type": "environmentNode",
       "title": "The Grand Marble Atrium & Lobby",
       "slug": "grand-atrium",
       "category": "Sanctuary",
@@ -40,7 +42,195 @@
       }
     },
     {
+      "id": "spatial-360-atrium",
+      "type": "spatialNode",
+      "title": "کاوشگر ۳۶۰ درجه گنبد مرمرین قصر",
+      "slug": "atrium-360",
+      "category": "Sanctuary",
+      "description": "نمای پانورامای پانصد ساله از لوسترهای کریستال باکارا و شاه‌نشین اختصاصی قصر",
+      "panoramaUrl": "https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=2400&q=85",
+      "previewThumbnailUrl": "https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=600&q=80",
+      "initialFov": 75,
+      "initialYaw": 180,
+      "initialPitch": 10,
+      "hotspots": [
+        {
+          "id": "hs-chandelier",
+          "yaw": 185,
+          "pitch": 42,
+          "title": "لوستر کریستال باکارا ۱۹۲۴",
+          "tagline": "اوج شکوه هنر شیشه‌گری دست‌ساز فرانسه",
+          "mediaType": "modal",
+          "details": {
+            "description": "این لوستر تشریفاتی متشکل از ۲,۴۰۰ قطعه کریستال تراش‌خورده با روکش طلای ۲۴ عیار است که در سال ۱۹۲۴ برای ورودی سلطنتی طراحی شد.",
+            "badge": "میراث تاریخی",
+            "specs": [
+              { "label": "وزن لوستر", "value": "۱,۱۸۰ کیلوگرم" },
+              { "label": "ارتفاع آویز", "value": "۸.۵ متر" },
+              { "label": "روشنایی", "value": "نور شمعی هوشمند ۳۰۰۰K" }
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=80"
+          }
+        },
+        {
+          "id": "hs-fountain",
+          "yaw": 240,
+          "pitch": -22,
+          "title": "آب‌نمای ابسیدین سیاه و گل‌های ارکیده",
+          "tagline": "آرامش بازتاب آب با دمای کنترل شده",
+          "mediaType": "modal",
+          "details": {
+            "description": "حوضچه مرکزی از سنگ بازالت تراش‌خورده کوهستانی با رایحه‌درمانی چوب صندل و گل‌های نیلوفر آبی.",
+            "badge": "معماری حسی",
+            "specs": [
+              { "label": "جنس حوضچه", "value": "سنگ ابسیدین ارمنستان" },
+              { "label": "رایحه محیطی", "value": "یاس سلطنتی و صندل" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "atmosphere-lobby-lighting",
+      "type": "atmosphereNode",
+      "title": "کنترلر اتمسفر نوری شاه‌نشین",
+      "targetSceneId": "env-lobby",
+      "baseMediaUrl": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1920&q=80",
+      "timeOfDay": "golden_hour",
+      "colorTemperatureK": 3200,
+      "activePresetId": "preset-golden",
+      "interactiveControls": true,
+      "presets": [
+        {
+          "id": "preset-dawn",
+          "name": "نسیم پگاه (Dawn Awakening)",
+          "timeOfDay": "dawn",
+          "colorTempK": 4800,
+          "exposure": 0.1,
+          "overlayGradient": "linear-gradient(135deg, rgba(254, 215, 170, 0.22) 0%, rgba(191, 219, 254, 0.15) 100%)",
+          "filterCss": "brightness(1.05) contrast(1.02) saturate(1.1) sepia(0.08)"
+        },
+        {
+          "id": "preset-zenith",
+          "name": "درخشش نیمروز (Zenith Daylight)",
+          "timeOfDay": "zenith",
+          "colorTempK": 5800,
+          "exposure": 0.25,
+          "overlayGradient": "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(224, 242, 254, 0.08) 100%)",
+          "filterCss": "brightness(1.15) contrast(1.08) saturate(1.05)"
+        },
+        {
+          "id": "preset-golden",
+          "name": "ساعت طلایی (Imperial Golden Hour)",
+          "timeOfDay": "golden_hour",
+          "colorTempK": 3000,
+          "exposure": 0.05,
+          "overlayGradient": "linear-gradient(45deg, rgba(245, 158, 11, 0.35) 0%, rgba(217, 119, 6, 0.2) 60%, rgba(180, 83, 9, 0.15) 100%)",
+          "filterCss": "brightness(1.02) contrast(1.12) saturate(1.35) sepia(0.25)"
+        },
+        {
+          "id": "preset-midnight",
+          "name": "سکوت مخملین شب (Velvet Midnight)",
+          "timeOfDay": "midnight",
+          "colorTempK": 2600,
+          "exposure": -0.3,
+          "overlayGradient": "linear-gradient(180deg, rgba(15, 23, 42, 0.65) 0%, rgba(67, 24, 255, 0.18) 100%)",
+          "filterCss": "brightness(0.72) contrast(1.22) saturate(0.9) hue-rotate(210deg)"
+        }
+      ]
+    },
+    {
+      "id": "audio-atrium-parallel",
+      "type": "audioNode",
+      "title": "منظره صوتی هارمونیک تالار مرمر",
+      "ambientTone": "marble_hall_reverb",
+      "volume": 0.65,
+      "fadeInDuration": 2.5,
+      "fadeOutDuration": 3.0,
+      "loop": true,
+      "isParallelAttachment": true,
+      "parallelTargetSequenceId": "env-lobby"
+    },
+    {
+      "id": "story-heritage-timeline",
+      "type": "storyTimelineNode",
+      "title": "تایم‌لاین روایت تاریخی قصر لورا",
+      "chapterTitle": "میراث یک سده شکوه معماری سلطنتی",
+      "era": "۱۹۲۴ - ۲۰۲۶",
+      "description": "روایت تعاملی از بنیان‌گذاری اقامتگاه قصر لورا در صخره‌های مدیترانه تا بازآفرینی مدرن فوق لوکس",
+      "waypoints": [
+        {
+          "id": "wp-1924",
+          "stepNumber": 1,
+          "timeLabel": "۱۹۲۴ میلادی",
+          "title": "نهادن سنگ بنای کاخ بر فراز صخره مرمرین",
+          "narrative": "معمار سلطنتی کارلو برنینی نخستین شالوده‌های تالار مرمر را با سنگ‌های استخراج شده از تپه‌های آلپ ایتالیا بنا نهاد.",
+          "mediaUrl": "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1200&q=80",
+          "quote": "«سکوت دریا و وقار سنگ، تنها تلاقی ماندگار جاودانگی هستند.»",
+          "architecturalNote": "بهره‌گیری از طاق‌های متقاطع نئو-کلاسیک با دهانه ۱۸ متر بدون ستون میانی."
+        },
+        {
+          "id": "wp-1968",
+          "stepNumber": 2,
+          "timeLabel": "۱۹۶۸ میلادی",
+          "title": "پذیرایی از پادشاهان و نشست‌های تاریخی جهان",
+          "narrative": "قصر لورا به خلوتگاه برگزیده‌ترین چهره‌های ادبیات، سینما و دیپلماسی جهان بدل شد و سوئیت‌های سلطنتی گسترش یافتند.",
+          "mediaUrl": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80",
+          "quote": "«اینجا جایی است که زمان جریان آرام‌تری به خود می‌گیرد.»",
+          "architecturalNote": "افزودن شاه‌نشین‌های مشبک و تراس‌های معلق بر فراز خلیج فیروزه‌ای."
+        },
+        {
+          "id": "wp-2026",
+          "stepNumber": 3,
+          "timeLabel": "عصر حاضر",
+          "title": "بازآفرینی دیجیتال و زیست‌بوم اقامتی آینده",
+          "narrative": "تلفیق هوش فضایی، کنترل اتمسفر حسی و حفظ بی‌نقص اصالت سنگ‌های صدساله در قالبی نوین.",
+          "mediaUrl": "https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1200&q=80",
+          "quote": "«شکوه اصیل نیازی به فریاد ندارد؛ در جزئیات زمزمه می‌کند.»"
+        }
+      ]
+    },
+    {
+      "id": "comparison-penthouse-vs-villa",
+      "type": "comparisonNode",
+      "title": "مقایسه داینامیک: پنت‌هاوس امپریال در برابر ویلای ساحلی",
+      "category": "Penthouse",
+      "comparisonMode": "split_slider",
+      "initialSplitRatio": 50,
+      "entityA": {
+        "id": "entity-penthouse",
+        "title": "پنت‌هاوس سلطنتی امپریال",
+        "subtitle": "چشم‌انداز ۳۶۰ درجه خط افق دریا در طبقه ۲۴",
+        "badge": "اوج شکوه و حریم خصوصی",
+        "mediaUrl": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80",
+        "description": "اقامتگاهی معلق میان آسمان و دریا با آسانسور شیشه‌ای اختصاصی، تراس مرمرین، جکوزی هوای آزاد و باتلر شخصی ۲۴ ساعته.",
+        "specs": [
+          { "label": "مساحت سرپوشیده", "value": "۴۸۰ متر مربع" },
+          { "label": "ارتفاع سقف", "value": "۴.۸ متر دوبلکس" },
+          { "label": "تراس روباز", "value": "۱۴۰ متر مربع با استخر شیشه‌ای" },
+          { "label": "حداکثر ظرفیت", "value": "۴ مهمان بزرگسال" },
+          { "label": "سرویس ویژه", "value": "سرآشپز میشلن اختصاصی در سوئیت" }
+        ]
+      },
+      "entityB": {
+        "id": "entity-villa",
+        "title": "ویلای ساحلی نیلوفر آبی",
+        "subtitle": "دسترسی مستقیم و بی‌واسطه به شن‌های طلایی خلیج",
+        "badge": "آرامش ژرف و طبیعت پیوسته",
+        "mediaUrl": "https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=1600&q=80",
+        "description": "باغ سرسبز استوایی اختصاصی احاطه شده با نخل‌های کهنسال، استخر آبگرم لب‌ریز و اسکله چوبی پهلوگیری قایق بادبانی.",
+        "specs": [
+          { "label": "مساحت کل عرصه", "value": "۸۲۰ متر مربع باغ و ویلا" },
+          { "label": "استخر اختصاصی", "value": "۱۸ متری اینفینیتی تصفیه نمک دریا" },
+          { "label": "دسترسی دریا", "value": "پای اسکله خصوصی ویلا" },
+          { "label": "حداکثر ظرفیت", "value": "۶ مهمان با اتاق ندیمه" },
+          { "label": "سرویس ویژه", "value": "ماساژور و اسپا در آلاچیق ساحلی" }
+        ]
+      }
+    },
+    {
       "id": "env-pool",
+      "type": "environmentNode",
       "title": "Azure Coastal Infinity Oasis",
       "slug": "infinity-oasis",
       "category": "Wellness",
@@ -63,7 +253,8 @@
       "id": "edge-gate-to-lobby",
       "sourceNodeId": "env-gate",
       "targetNodeId": "env-lobby",
-      "label": "Pass Through Bronze Gates into Grand Lobby",
+      "label": "ورود از درگاه برنزی به تالار مرمر",
+      "edgeType": "sequential",
       "triggerType": "click",
       "direction": "forward",
       "soundCue": "door_glide_chime",
@@ -75,10 +266,54 @@
       }
     },
     {
+      "id": "edge-lobby-to-spatial",
+      "sourceNodeId": "env-lobby",
+      "targetNodeId": "spatial-360-atrium",
+      "label": "انشعاب تعاملی: کاوش ۳۶۰ درجه گنبد و لوسترها",
+      "edgeType": "interactive_branch",
+      "triggerType": "hotspot",
+      "direction": "ascend"
+    },
+    {
+      "id": "edge-atmosphere-to-lobby",
+      "sourceNodeId": "atmosphere-lobby-lighting",
+      "targetNodeId": "env-lobby",
+      "label": "لایه‌گذاری اتمسفر: تنظیم نورپردازی و حالت روز/شب",
+      "edgeType": "atmosphere_layer",
+      "triggerType": "parallel_auto"
+    },
+    {
+      "id": "edge-audio-parallel-lobby",
+      "sourceNodeId": "audio-atrium-parallel",
+      "targetNodeId": "env-lobby",
+      "label": "اجرای موازی: منظره صوتی فراگیر ریورب تالار",
+      "edgeType": "parallel_audio",
+      "triggerType": "parallel_auto"
+    },
+    {
+      "id": "edge-lobby-to-story",
+      "sourceNodeId": "env-lobby",
+      "targetNodeId": "story-heritage-timeline",
+      "label": "ورود به روایت صد ساله قصر لورا",
+      "edgeType": "interactive_branch",
+      "triggerType": "click",
+      "direction": "forward"
+    },
+    {
+      "id": "edge-lobby-to-comparison",
+      "sourceNodeId": "env-lobby",
+      "targetNodeId": "comparison-penthouse-vs-villa",
+      "label": "مقایسه هوشمند: پنت‌هاوس در برابر ویلای ساحلی",
+      "edgeType": "comparison_fork",
+      "triggerType": "menu",
+      "direction": "lateral"
+    },
+    {
       "id": "edge-lobby-to-pool",
       "sourceNodeId": "env-lobby",
       "targetNodeId": "env-pool",
-      "label": "Step Out to the Coastal Clifftop Pool",
+      "label": "گذر به سوی استخر بی‌نهایت و صخره‌های ساحلی",
+      "edgeType": "sequential",
       "triggerType": "click",
       "direction": "lateral",
       "soundCue": "water_breeze",
@@ -93,7 +328,8 @@
       "id": "edge-pool-to-lobby",
       "sourceNodeId": "env-pool",
       "targetNodeId": "env-lobby",
-      "label": "Return to the Air-Conditioned Atrium",
+      "label": "بازگشت به خنکای تالار مرمرین",
+      "edgeType": "sequential",
       "triggerType": "click",
       "direction": "backward",
       "soundCue": "reverb_echo",
