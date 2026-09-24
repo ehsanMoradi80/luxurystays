@@ -13,4 +13,56 @@
   .font-mono {
     font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
   }
+
+  /* اسکرول بار لوکس، باریک و هماهنگ با تم طلایی-آبنوس */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0a0a0a;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #2a2a2a;
+    border-radius: 9999px;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    transition: all 0.2s ease-in-out;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #f59e0b;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+  }
+
+  /* سازگاری با فایرفاکس */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #333333 #0a0a0a;
+  }
+}
+
+/* کلاس‌های کمکی اسکرول بار بدون اثر مخرب بر تعامل */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.luxury-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.luxury-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.luxury-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(245, 158, 11, 0.2);
+  border-radius: 9999px;
+}
+.luxury-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 158, 11, 0.6);
 }

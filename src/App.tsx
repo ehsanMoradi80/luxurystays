@@ -1,53 +1,195 @@
 /**
  * App.tsx
  * 
- * سایت و موتور خلق تجربه دیجیتال هتل ۵ ستاره فوق لوکس قصر لورا
- * پشتیبانی از معماری تعاملی و بلوک‌های تجربه پیشرفته:
- * - ExperienceEngine: رندر هوشمند بر اساس نوع گره (سکانس‌های ویدیویی، کاوشگر ۳۶۰، کنترلر اتمسفر، روایت داستان، مقایسه)
- * - FlowCanvas: بوم گره‌محور React Flow برای مدیریت معماری و استخراج JSON
+ * سایت اختصاصی هتل ۵ ستاره فوق لوکس قصر لورا
+ * - صفحه اصلی کاملاً لوکس، اختصاصی مهمانان، بدون هیچ دکمه یا المان ادمین
+ * - سکانس‌ها و ترنزیشن‌ها بر اساس ترتیب خطی و قطعی (اول و آخر مشخص - بدون لوپ)
+ * - هدر اشرافی با نوار پروگرس زیر هدر و ناوبری اسکرولی پیوسته
+ * - دسترسی به پنل ادمین React Flow منحصراً از طریق آدرس (?admin=true یا #admin)
  */
 
-import React, { useState } from 'react';
-import { FlowCanvas } from './components/FlowCanvas';
-import { ExperienceEngine } from './components/ExperienceEngine';
-import sampleGraphData from './data/sampleSequenceGraph.json';
-import { SequenceGraph } from './types/sequenceGraph';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { hotelExperienceGraphData, getNodeById } from './data/mockCmsData';
+import { 
+  SequencerStatus, 
+  TransitionEdge 
+} from './types/cms';
+import { 
+  VideoExperienceManager, 
+  VideoManagerHandle 
+} from './components/VideoExperienceManager';
+import { SpaceInfoOverlay } from './components/SpaceInfoOverlay';
+import { NavigationTimeline } from './components/NavigationTimeline';
+import { LuxuryBookingPage } from './components/booking/LuxuryBookingPage';
+import { AdminDashboard } from './components/admin/AdminDashboard';
+import { audioAmbiance } from './services/AudioAmbienceEngine';
+import { useThemeAndSiteStore } from './store/useThemeAndSiteStore';
 
 export default function App() {
-  const [activeView, setActiveView] = useState<'EXPERIENCE' | 'FLOW_BUILDER'>('EXPERIENCE');
-  const [previewNodeId, setPreviewNodeId] = useState<string>('env-gate');
+  const graph = hotelExperienceGraphData;
+  const { setPreSelectedRoomId } = useThemeAndSiteStore();
 
-  // سوئیچ به پنل بوم ادمین React Flow
-  const handleOpenFlowCanvas = () => {
-    setActiveView('FLOW_BUILDER');
+  // بررسی وضعیت ادمین بر اساس پارامتر URL یا هش (#admin یا ?admin=true)
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return (
+        window.location.search.includes('admin') ||
+        window.location.hash.toLowerCase().includes('admin')
+      );
+    }
+    return false;
+  });
+
+  const [activeView, setActiveView] = useState<'EXPERIENCE' | 'BOOKING' | 'ADMIN'>(() => {
+    if (typeof window !== 'undefined') {
+      if (window.location.search.includes('admin') || window.location.hash.includes('admin')) {
+        return 'ADMIN';
+      }
+      if (window.location.search.includes('booking') || window.location.hash.includes('booking')) {
+        return 'BOOKING';
+      }
+    }
+    return 'EXPERIENCE';
+  });
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.toLowerCase();
+      const search = window.location.search.toLowerCase();
+      const hasAdmin = hash.includes('admin') || search.includes('admin');
+      const hasBooking = hash.includes('booking') || search.includes('booking');
+      
+      setIsAdmin(hasAdmin);
+      if (hasAdmin) {
+        setActiveView('ADMIN');
+      } else if (hasBooking) {
+        setActiveView('BOOKING');
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const [currentNodeId, setCurrentNodeId] = useState<string>(graph.initialNodeId);
+  const [status, setStatus] = useState<SequencerStatus>('IDLE_LOOP');
+
+  // وضعیت و متادیتای ترنزیشن برای نوار پیشرفت زیر هدر
+  const [transitionProgress, setTransitionProgress] = useState<number>(0);
+  const [transitionSourceTitle, setTransitionSourceTitle] = useState<string>('');
+  const [transitionTargetTitle, setTransitionTargetTitle] = useState<string>('');
+  const [isReverseTransition, setIsReverseTransition] = useState<boolean>(false);
+
+  // وضعیت صدا (به‌صورت پیش‌فرض قطع تا کاربر فعال کند)
+  const [isAudioMuted, setIsAudioMuted] = useState<boolean>(true);
+
+  const videoManagerRef = useRef<VideoManagerHandle | null>(null);
+
+  const currentNode = getNodeById(graph, currentNodeId) || graph.nodes[0];
+  const isTransitioning = status === 'TRANSITIONING' || status === 'PREPARING_TRANSITION';
+
+  const currentIndex = graph.nodes.findIndex((n) => n.id === currentNode.id);
+  const totalScenes = graph.nodes.length;
+
+  // سوئیچ پخش صدا
+  const handleToggleAudio = useCallback(() => {
+    const nextMuted = !isAudioMuted;
+    setIsAudioMuted(nextMuted);
+    audioAmbiance.setMuted(nextMuted);
+    if (!nextMuted) {
+      audioAmbiance.playAmbiance(currentNode.audioProfile.tone, currentNode.audioProfile.volume);
+    }
+  }, [isAudioMuted, currentNode]);
+
+  const handleStatusChange = useCallback(
+    (
+      newStatus: SequencerStatus,
+      progress: number,
+      extra?: { sourceTitle: string; targetTitle: string; isReverse: boolean }
+    ) => {
+      setStatus(newStatus);
+      setTransitionProgress(progress);
+      if (extra) {
+        setTransitionSourceTitle(extra.sourceTitle);
+        setTransitionTargetTitle(extra.targetTitle);
+        setIsReverseTransition(extra.isReverse);
+      }
+    },
+    []
+  );
+
+  const handleTransitionStart = useCallback((_edge: TransitionEdge) => {}, []);
+  const handleTransitionEnd = useCallback((_targetId: string) => {}, []);
+
+  const handleOpenBooking = () => {
+    // تطبیق سکانس جاری با اتاق مناسب در صورت امکان
+    if (currentNode.id.includes('suite') || currentNode.id.includes('atrium')) {
+      setPreSelectedRoomId('suite-penthouse');
+    }
+    setActiveView('BOOKING');
   };
 
-  // سوئیچ به فرانت‌اند تجربه زنده
-  const handleSwitchToExperience = () => {
-    setActiveView('EXPERIENCE');
-  };
+  // ۱. حالت اختصاصی: صفحه مستقل و تمام‌صفحه رزرواسیون هتل
+  if (activeView === 'BOOKING') {
+    return (
+      <LuxuryBookingPage
+        onBackToExperience={() => setActiveView('EXPERIENCE')}
+      />
+    );
+  }
 
-  // پیش‌نمایش مستقیم یک گره خاص در فرانت‌اند
-  const handlePreviewNode = (nodeId: string) => {
-    setPreviewNodeId(nodeId);
-    setActiveView('EXPERIENCE');
-  };
+  // ۲. حالت ادمین: پنل مدیریت جامع هتل (سیستم تم، شخصی‌سازی سایت‌ها، ماتریس دسترسی و گراف)
+  if (activeView === 'ADMIN') {
+    return (
+      <AdminDashboard onReturnToExperience={() => setActiveView('EXPERIENCE')} />
+    );
+  }
 
+  // ۳. حالت اصلی: گشت سینمایی و ویدیویی هتل
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-neutral-950 text-neutral-100 select-none font-sans">
-      {activeView === 'FLOW_BUILDER' ? (
-        <FlowCanvas
-          onSwitchToExperience={handleSwitchToExperience}
-          onPreviewNode={handlePreviewNode}
-        />
-      ) : (
-        <ExperienceEngine
-          graph={sampleGraphData as unknown as SequenceGraph}
-          initialNodeId={previewNodeId}
-          onOpenFlowCanvas={handleOpenFlowCanvas}
-          isAdmin={true}
-        />
-      )}
+      {/* =========================================================================
+          لایه Z-0: توالی‌سنج سینمایی سکانس‌ها و ترنزیشن‌ها (با کش LRU و اسکرول نرم)
+          ========================================================================= */}
+      <VideoExperienceManager
+        ref={videoManagerRef}
+        graph={graph}
+        currentNodeId={currentNodeId}
+        onNodeChange={setCurrentNodeId}
+        onStatusChange={handleStatusChange}
+        onTransitionStart={handleTransitionStart}
+        onTransitionEnd={handleTransitionEnd}
+        enableScrollScrubbing={true}
+      />
+
+      {/* =========================================================================
+          لایه Z-30: اطلاعات فضا، عنوان و دکمه باز کردن صفحه رزرواسیون
+          ========================================================================= */}
+      <SpaceInfoOverlay
+        currentNode={currentNode}
+        isTransitioning={isTransitioning}
+        onOpenBooking={handleOpenBooking}
+        currentIndex={currentIndex !== -1 ? currentIndex : 0}
+        totalScenes={totalScenes}
+      />
+
+      {/* =========================================================================
+          لایه Z-40: هدر لوکس هتل + نوار پروگرس موقت در زیر هدر
+          ========================================================================= */}
+      <NavigationTimeline
+        isAudioMuted={isAudioMuted}
+        onToggleAudio={handleToggleAudio}
+        isAdmin={isAdmin}
+        onOpenAdmin={() => setActiveView('ADMIN')}
+        currentIndex={currentIndex !== -1 ? currentIndex : 0}
+        totalScenes={totalScenes}
+        currentNode={currentNode}
+        isTransitioning={isTransitioning}
+        transitionProgress={transitionProgress}
+        transitionSourceTitle={transitionSourceTitle}
+        transitionTargetTitle={transitionTargetTitle}
+        isReverseTransition={isReverseTransition}
+      />
     </main>
   );
 }

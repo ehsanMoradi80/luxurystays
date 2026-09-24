@@ -9,6 +9,7 @@
 import React, { useState, useMemo } from 'react';
 import { AtmosphereNodeData, AtmosphereLightingPreset } from '../../types/sequenceGraph';
 import { Sun, Moon, Sunset, Flame, Sliders, Sparkles, Layers, Eye } from 'lucide-react';
+import { toPersianDigits } from '../../utils/JalaliDate';
 
 interface AtmosphereControllerProps {
   nodeData: AtmosphereNodeData;
@@ -181,7 +182,7 @@ export const AtmosphereController: React.FC<AtmosphereControllerProps> = ({
                       {p.timeOfDay === 'midnight' && <Moon className="w-4 h-4 text-indigo-400" />}
                     </div>
                     <span className="text-xs font-semibold text-center">{p.name.split(' (')[0]}</span>
-                    <span className="text-[10px] font-mono opacity-70">{p.colorTempK}K</span>
+                    <span className="text-[10px] opacity-70">{toPersianDigits(p.colorTempK)} کلوین</span>
                   </button>
                 );
               })}
@@ -195,8 +196,8 @@ export const AtmosphereController: React.FC<AtmosphereControllerProps> = ({
                 <Sun className="w-4 h-4 text-amber-400" />
                 چرخه ۲۴ ساعته نور طبیعی خورشید:
               </span>
-              <span className="font-mono text-amber-300 font-bold text-sm">
-                {String(Math.floor(sliderTimeOfDay)).padStart(2, '0')}:00
+              <span className="text-amber-300 font-bold text-sm">
+                ساعت {toPersianDigits(String(Math.floor(sliderTimeOfDay)).padStart(2, '0'))}:۰۰
               </span>
             </div>
             <input
@@ -224,7 +225,7 @@ export const AtmosphereController: React.FC<AtmosphereControllerProps> = ({
               }}
               className="w-full accent-amber-400 h-2 bg-neutral-800 rounded-lg cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
+            <div className="flex justify-between text-[10px] text-neutral-400">
               <span>۰۰:۰۰ (نیمه‌شب)</span>
               <span>۰۶:۰۰ (پگاه)</span>
               <span>۱۲:۰۰ (نیمروز)</span>
@@ -242,7 +243,7 @@ export const AtmosphereController: React.FC<AtmosphereControllerProps> = ({
                   <Sliders className="w-3.5 h-3.5 text-amber-400" />
                   دمای کلوین (Kelvin):
                 </span>
-                <span className="font-mono text-amber-400 font-bold">{colorTempK} K</span>
+                <span className="text-amber-400 font-bold">{toPersianDigits(colorTempK)} کلوین</span>
               </div>
               <input
                 type="range"
@@ -253,9 +254,9 @@ export const AtmosphereController: React.FC<AtmosphereControllerProps> = ({
                 onChange={(e) => setColorTempK(parseInt(e.target.value, 10))}
                 className="w-full accent-amber-400 h-1.5 bg-neutral-800 rounded-lg cursor-pointer"
               />
-              <div className="flex justify-between text-[9px] text-neutral-500 font-mono mt-1">
-                <span>۲۴۰۰K (گرم/شمع)</span>
-                <span>۶۵۰۰K (خنک/آسمان)</span>
+              <div className="flex justify-between text-[9px] text-neutral-500 mt-1">
+                <span>{toPersianDigits(2400)}K (گرم/شمع)</span>
+                <span>{toPersianDigits(6500)}K (خنک/آسمان)</span>
               </div>
             </div>
 
@@ -266,8 +267,8 @@ export const AtmosphereController: React.FC<AtmosphereControllerProps> = ({
                   <Eye className="w-3.5 h-3.5 text-sky-400" />
                   نوردهی و شفافیت (Exposure):
                 </span>
-                <span className="font-mono text-sky-400 font-bold">
-                  {exposureVal > 0 ? `+${exposureVal.toFixed(2)}` : exposureVal.toFixed(2)} EV
+                <span className="text-sky-400 font-bold">
+                  {toPersianDigits(exposureVal > 0 ? `+${exposureVal.toFixed(2)}` : exposureVal.toFixed(2))} EV
                 </span>
               </div>
               <input
@@ -279,12 +280,13 @@ export const AtmosphereController: React.FC<AtmosphereControllerProps> = ({
                 onChange={(e) => setExposureVal(parseFloat(e.target.value))}
                 className="w-full accent-sky-400 h-1.5 bg-neutral-800 rounded-lg cursor-pointer"
               />
-              <div className="flex justify-between text-[9px] text-neutral-500 font-mono mt-1">
+              <div className="flex justify-between text-[9px] text-neutral-500 mt-1">
                 <span>-۰.۴ (سایه‌روشن)</span>
                 <span>+۰.۴ (درخشان)</span>
               </div>
             </div>
           </div>
+
         </div>
       </div>
     </div>

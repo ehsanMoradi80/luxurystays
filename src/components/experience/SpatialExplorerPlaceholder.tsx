@@ -9,6 +9,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { SpatialNodeData, SpatialHotspotConfig } from '../../types/sequenceGraph';
 import { Compass, Move, MapPin, X, Info, Sparkles } from 'lucide-react';
+import { toPersianDigits, autoPersianText } from '../../utils/JalaliDate';
 
 interface SpatialExplorerPlaceholderProps {
   nodeData: SpatialNodeData;
@@ -170,8 +171,8 @@ export const SpatialExplorerPlaceholder: React.FC<SpatialExplorerPlaceholderProp
           <span>برای چرخیدن ۳۶۰ درجه، ماوس را کلیک کرده و بکشید</span>
         </div>
 
-        <div className="bg-black/60 backdrop-blur-xl border border-white/10 px-3 py-1.5 rounded-xl font-mono text-[11px] text-emerald-400 pointer-events-auto">
-          Yaw: {Math.round(yaw)}° | Pitch: {Math.round(pitch)}°
+        <div className="bg-black/60 backdrop-blur-xl border border-white/10 px-3 py-1.5 rounded-xl text-[11px] text-emerald-400 pointer-events-auto">
+          زاویه افقی: {toPersianDigits(Math.round(yaw))}° | زاویه عمودی: {toPersianDigits(Math.round(pitch))}°
         </div>
       </div>
 
@@ -191,10 +192,10 @@ export const SpatialExplorerPlaceholder: React.FC<SpatialExplorerPlaceholderProp
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-emerald-400" />
                 <div>
-                  <span className="text-[10px] text-emerald-400 font-mono tracking-wider">
-                    {selectedHotspot.details?.badge || 'نقطه جذابیت معماری'}
+                  <span className="text-[10px] text-emerald-400 tracking-wider">
+                    {autoPersianText(selectedHotspot.details?.badge || 'نقطه جذابیت معماری')}
                   </span>
-                  <h3 className="font-bold text-base text-white">{selectedHotspot.title}</h3>
+                  <h3 className="font-bold text-base text-white">{autoPersianText(selectedHotspot.title)}</h3>
                 </div>
               </div>
               <button
@@ -214,15 +215,15 @@ export const SpatialExplorerPlaceholder: React.FC<SpatialExplorerPlaceholderProp
             )}
 
             <p className="text-xs text-neutral-300 leading-relaxed mb-4">
-              {selectedHotspot.details?.description || selectedHotspot.tagline || 'شرح تفصیلی شاهکار معماری هتل'}
+              {autoPersianText(selectedHotspot.details?.description || selectedHotspot.tagline || 'شرح تفصیلی شاهکار معماری هتل')}
             </p>
 
             {selectedHotspot.details?.specs && (
               <div className="space-y-1.5 bg-neutral-950 p-3 rounded-2xl border border-neutral-800 mb-4">
                 {selectedHotspot.details.specs.map((spec, i) => (
                   <div key={i} className="flex justify-between text-xs">
-                    <span className="text-neutral-400">{spec.label}:</span>
-                    <span className="text-emerald-300 font-semibold">{spec.value}</span>
+                    <span className="text-neutral-400">{autoPersianText(spec.label)}:</span>
+                    <span className="text-emerald-300 font-semibold">{toPersianDigits(spec.value)}</span>
                   </div>
                 ))}
               </div>

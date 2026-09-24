@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import { StoryTimelineNodeData } from '../../types/sequenceGraph';
 import { BookOpen, Milestone, Clock, ChevronDown, Quote, Sparkles } from 'lucide-react';
+import { toPersianDigits, autoPersianText } from '../../utils/JalaliDate';
 
 interface StoryTimelinePlaceholderProps {
   nodeData: StoryTimelineNodeData;
@@ -52,11 +53,11 @@ export const StoryTimelinePlaceholder: React.FC<StoryTimelinePlaceholderProps> =
                 Interactive Storyline
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-400/10 text-rose-300 border border-rose-400/30">
-                {nodeData.era || '۱۹۲۴ - ۲۰۲۶'}
+                {toPersianDigits(nodeData.era || '۱۹۲۴ - ۲۰۲۶')}
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-serif text-white font-bold tracking-wide">
-              {nodeData.chapterTitle || nodeData.title}
+              {autoPersianText(nodeData.chapterTitle || nodeData.title)}
             </h2>
           </div>
         </div>
@@ -80,21 +81,21 @@ export const StoryTimelinePlaceholder: React.FC<StoryTimelinePlaceholderProps> =
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-400 animate-ping" />
-                <span className="font-mono text-xs text-rose-400 font-bold">
-                  {activeWaypoint.timeLabel}
+                <span className="text-xs text-rose-400 font-bold">
+                  {toPersianDigits(activeWaypoint.timeLabel)}
                 </span>
               </div>
-              <span className="text-neutral-400 text-xs font-mono">
-                گام {activeWaypointIndex + 1} از {waypoints.length}
+              <span className="text-neutral-400 text-xs">
+                گام {toPersianDigits(activeWaypointIndex + 1)} از {toPersianDigits(waypoints.length)}
               </span>
             </div>
 
             <h3 className="text-xl sm:text-2xl font-serif font-bold text-white leading-tight">
-              {activeWaypoint.title}
+              {autoPersianText(activeWaypoint.title)}
             </h3>
 
             <p className="text-neutral-200 text-sm sm:text-base leading-relaxed">
-              {activeWaypoint.narrative}
+              {autoPersianText(activeWaypoint.narrative)}
             </p>
 
             {activeWaypoint.quote && (

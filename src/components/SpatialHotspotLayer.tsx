@@ -7,6 +7,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Hotspot } from '../types/cms';
+import { autoPersianText } from '../utils/JalaliDate';
 import { 
   Sparkles, 
   Car, 
@@ -87,7 +88,7 @@ export const SpatialHotspotLayer: React.FC<SpatialHotspotLayerProps> = ({
                 <div className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-60 opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-300 translate-y-1 group-hover:translate-y-0 z-30">
                   <div className="bg-neutral-900/95 border border-amber-400/30 backdrop-blur-xl p-3.5 rounded-xl shadow-2xl text-right">
                     <div className="flex items-center justify-between text-[11px] font-semibold text-amber-300 mb-1">
-                      <span>{spot.tagline}</span>
+                      <span>{autoPersianText(spot.tagline)}</span>
                       {spot.action.type === 'navigate' ? (
                         <span className="text-amber-400/80 text-[10px]">ورود به فضا ←</span>
                       ) : (
@@ -95,10 +96,10 @@ export const SpatialHotspotLayer: React.FC<SpatialHotspotLayerProps> = ({
                       )}
                     </div>
                     <div className="font-serif text-sm text-neutral-100 font-medium">
-                      {spot.title}
+                      {autoPersianText(spot.title)}
                     </div>
                     <p className="text-xs text-neutral-300 line-clamp-2 mt-1 leading-relaxed">
-                      {spot.description}
+                      {autoPersianText(spot.description)}
                     </p>
                   </div>
                 </div>

@@ -8,6 +8,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Hotspot } from '../types/cms';
 import { X, Sparkles } from 'lucide-react';
+import { autoPersianText, toPersianDigits } from '../utils/JalaliDate';
 
 interface HotspotDetailModalProps {
   hotspot: Hotspot | null;
@@ -40,27 +41,27 @@ export const HotspotDetailModal: React.FC<HotspotDetailModalProps> = ({
               <span>شاهکار معماری و امکانات قصر</span>
               {hotspot.action.details?.badge && (
                 <span className="px-2 py-0.5 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-[10px]">
-                  {hotspot.action.details.badge}
+                  {autoPersianText(hotspot.action.details.badge)}
                 </span>
               )}
             </div>
 
             <h3 className="font-serif text-xl sm:text-2xl text-neutral-100 font-bold mb-1">
-              {hotspot.title}
+              {autoPersianText(hotspot.title)}
             </h3>
             <p className="text-xs text-amber-300/90 mb-3">
-              {hotspot.tagline}
+              {autoPersianText(hotspot.tagline)}
             </p>
             <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed mb-5">
-              {hotspot.description}
+              {autoPersianText(hotspot.description)}
             </p>
 
             {hotspot.action.details?.specs && (
               <div className="space-y-2 mb-6 border-t border-neutral-800 pt-3">
                 {hotspot.action.details.specs.map((spec, i) => (
                   <div key={i} className="flex justify-between items-center text-xs">
-                    <span className="text-neutral-400">{spec.label}</span>
-                    <span className="text-amber-200 font-medium">{spec.value}</span>
+                    <span className="text-neutral-400">{autoPersianText(spec.label)}</span>
+                    <span className="text-amber-200 font-medium">{toPersianDigits(spec.value)}</span>
                   </div>
                 ))}
               </div>

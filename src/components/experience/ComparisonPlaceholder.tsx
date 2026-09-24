@@ -9,6 +9,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { ComparisonNodeData } from '../../types/sequenceGraph';
 import { Columns, ArrowLeftRight, Check, Sparkles, Building, Waves } from 'lucide-react';
+import { toPersianDigits, autoPersianText } from '../../utils/JalaliDate';
 
 interface ComparisonPlaceholderProps {
   nodeData: ComparisonNodeData;
@@ -153,12 +154,12 @@ export const ComparisonPlaceholder: React.FC<ComparisonPlaceholderProps> = ({
               <Building className="w-4 h-4" />
               {entityA.title}
             </span>
-            <span className="text-[10px] font-mono text-neutral-500">
-              اسلایدر تفکیک تصویر: {Math.round(splitRatio)}% / {Math.round(100 - splitRatio)}%
+            <span className="text-[10px] text-neutral-400">
+              تفکیک تصویر: ٪{toPersianDigits(Math.round(splitRatio))} / ٪{toPersianDigits(Math.round(100 - splitRatio))}
             </span>
             <span className="font-semibold text-amber-300 flex items-center gap-1.5">
               <Waves className="w-4 h-4" />
-              {entityB.title}
+              {autoPersianText(entityB.title)}
             </span>
           </div>
 
@@ -170,9 +171,9 @@ export const ComparisonPlaceholder: React.FC<ComparisonPlaceholderProps> = ({
                   key={index}
                   className="grid grid-cols-3 gap-2 bg-neutral-900/60 p-2 rounded-xl border border-white/5 items-center text-center"
                 >
-                  <div className="font-medium text-cyan-200 truncate">{specA.value}</div>
-                  <div className="text-[10px] text-neutral-400 font-mono">{specA.label}</div>
-                  <div className="font-medium text-amber-200 truncate">{specB?.value || '—'}</div>
+                  <div className="font-medium text-cyan-200 truncate">{toPersianDigits(specA.value)}</div>
+                  <div className="text-[10px] text-neutral-400">{autoPersianText(specA.label)}</div>
+                  <div className="font-medium text-amber-200 truncate">{specB ? toPersianDigits(specB.value) : '—'}</div>
                 </div>
               );
             })}
