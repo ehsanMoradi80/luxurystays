@@ -309,6 +309,13 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
   };
 
   const handleTouchCancel = () => {
+    if (touchStartXRef.current !== null && touchCurrentXRef.current !== null) {
+      const deltaX = touchCurrentXRef.current - touchStartXRef.current;
+      const deltaY = (touchCurrentYRef.current ?? touchStartYRef.current ?? 0) - (touchStartYRef.current ?? 0);
+      if (Math.abs(deltaX) >= 25 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
+        executeSwipe(deltaX);
+      }
+    }
     touchStartXRef.current = null;
     touchStartYRef.current = null;
     touchCurrentXRef.current = null;
@@ -331,7 +338,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
     const deltaX = e.clientX - pointerStartXRef.current;
     const deltaY = pointerStartYRef.current !== null ? e.clientY - pointerStartYRef.current : 0;
 
-    if (Math.abs(deltaX) >= 40 && Math.abs(deltaX) > Math.abs(deltaY) * 0.6) {
+    if (Math.abs(deltaX) >= 25 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
       executeSwipe(deltaX);
     }
 
@@ -340,8 +347,27 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
     pointerStartYRef.current = null;
   };
 
-  // پشتیبانی مستقیم از کلیدهای کیبورد (چپ = بعد، راست = قبل در RTL)
+  // پشتیبانی سراسری از ماوس/ترک‌پد و کلیدهای کیبورد (چپ = بعد، راست = قبل در RTL)
   useEffect(() => {
+    const handleGlobalPointerUp = (e: PointerEvent) => {
+      if (!isPointerDownRef.current || pointerStartXRef.current === null) {
+        isPointerDownRef.current = false;
+        pointerStartXRef.current = null;
+        pointerStartYRef.current = null;
+        return;
+      }
+      const deltaX = e.clientX - pointerStartXRef.current;
+      const deltaY = pointerStartYRef.current !== null ? e.clientY - pointerStartYRef.current : 0;
+
+      if (Math.abs(deltaX) >= 25 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
+        executeSwipe(deltaX);
+      }
+
+      isPointerDownRef.current = false;
+      pointerStartXRef.current = null;
+      pointerStartYRef.current = null;
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isInteractiveElement(document.activeElement)) return;
       if (e.key === 'ArrowLeft') {
@@ -351,9 +377,15 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
       }
     };
 
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+    window.addEventListener('pointercancel', handleGlobalPointerUp);
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [goToNextStep, goToPrevStep]);
+    return () => {
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+      window.removeEventListener('pointercancel', handleGlobalPointerUp);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [executeSwipe, goToNextStep, goToPrevStep]);
 
   // محاسبه شب‌های اقامت با تقویم جلالی
   const totalNights = calculateJalaliNights(startDate, endDate);
@@ -480,7 +512,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
             title={currentStep === 1 ? 'بازگشت به تور' : 'مرحله قبل'}
             aria-label="بازگشت"
           >
-            <ArrowRight className="w-5 h-5 text-amber-400 group-hover:-translate-x-0.5 transition-transform" />
+            <ArrowRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
           </button>
 
           {/* دکمه شناور اسکیپ (Skip) - بدون ضربدر و بدون متن */}
@@ -549,7 +581,14 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
               animate="center"
               exit="exit"
               transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              className="space-y-6"
+              onPanEnd={(_e, info) => {
+                const deltaX = info.offset.x;
+                const deltaY = info.offset.y;
+                if (Math.abs(deltaX) >= 25 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
+                  executeSwipe(deltaX);
+                }
+              }}
+              className="space-y-6 touch-pan-y select-none"
             >
               {/* =====================================================================
                   مرحله ۱: انتخاب اقامتگاه و سوئیت مجلل (Room Selection First)
