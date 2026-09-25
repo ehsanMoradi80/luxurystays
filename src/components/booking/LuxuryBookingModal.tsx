@@ -26,6 +26,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
     <AdaptiveOverlay
       isOpen={isOpen}
       onClose={onClose}
+      onSkip={onClose}
       mode="auto"
       maxWidthClass="max-w-2xl lg:max-w-3xl"
       title={
@@ -45,6 +46,8 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
       <BookingWizard
         initialSpaceTitle={spaceTitle}
         onComplete={onClose}
+        onSkip={onClose}
+        onClose={onClose}
       />
     </AdaptiveOverlay>
   );

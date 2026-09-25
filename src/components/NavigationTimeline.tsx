@@ -27,6 +27,7 @@ interface NavigationTimelineProps {
   transitionSourceTitle?: string;
   transitionTargetTitle?: string;
   isReverseTransition?: boolean;
+  isBookingOpen?: boolean;
 }
 
 export const NavigationTimeline: React.FC<NavigationTimelineProps> = ({
@@ -40,6 +41,7 @@ export const NavigationTimeline: React.FC<NavigationTimelineProps> = ({
   isTransitioning = false,
   transitionProgress = 0,
   isReverseTransition = false,
+  isBookingOpen = false,
 }) => {
   const { sites, activeSiteId } = useThemeAndSiteStore();
   const currentSite = sites[activeSiteId];
@@ -107,69 +109,64 @@ export const NavigationTimeline: React.FC<NavigationTimelineProps> = ({
       </header>
 
       {/* =========================================================================
-          نوار پروگرس سکانس‌ها: کاملاً شفاف، چسبیده زیر هدر، بدون متن، بدون بج و بدون شماره
+          نوار پروگرس سکانس‌ها: در زمان رزرواسیون پنهان شده تا ویزارد مستقیماً زیر هدر داک شود
           ========================================================================= */}
-      <div className="w-full max-w-3xl mx-auto mt-2 pointer-events-none">
-        <div className="grid grid-cols-5 gap-1.5 sm:gap-2 w-full">
-          {Array.from({ length: totalScenes }).map((_, idx) => {
-            let widthPercent = 0;
-            let barStyle = 'bg-white/20';
+      {!isBookingOpen && (
+        <div className="w-full max-w-3xl mx-auto mt-2 pointer-events-none">
+          <div className="grid grid-cols-5 gap-1.5 sm:gap-2 w-full">
+            {Array.from({ length: totalScenes }).map((_, idx) => {
+              let widthPercent = 0;
+              let barStyle = 'bg-white/20';
 
-            if (isTransitioning) {
-              if (isReverseTransition) {
-                // ترنزیشن به سکانس قبل (دنده عقب):
-                // نوار سکانس قبلی (idx < currentIndex) پر است
-                // نوار همین سکانس جاری (idx === currentIndex) باید تخلیه شود تا به سکانس قبل برسیم
+              if (isTransitioning) {
+                if (isReverseTransition) {
+                  if (idx < currentIndex) {
+                    widthPercent = 100;
+                    barStyle = idx === currentIndex - 1 ? 'bg-amber-400' : 'bg-neutral-400/80';
+                  } else if (idx === currentIndex) {
+                    widthPercent = Math.max(0, Math.min(100, Math.round((1 - transitionProgress) * 100)));
+                    barStyle = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]';
+                  } else {
+                    widthPercent = 0;
+                  }
+                } else {
+                  if (idx <= currentIndex) {
+                    widthPercent = 100;
+                    barStyle = idx === currentIndex ? 'bg-amber-400' : 'bg-neutral-400/80';
+                  } else if (idx === currentIndex + 1) {
+                    widthPercent = Math.max(0, Math.min(100, Math.round(transitionProgress * 100)));
+                    barStyle = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]';
+                  } else {
+                    widthPercent = 0;
+                  }
+                }
+              } else {
                 if (idx < currentIndex) {
                   widthPercent = 100;
-                  barStyle = idx === currentIndex - 1 ? 'bg-amber-400' : 'bg-neutral-400/80';
+                  barStyle = 'bg-neutral-400/80';
                 } else if (idx === currentIndex) {
-                  widthPercent = Math.max(0, Math.min(100, Math.round((1 - transitionProgress) * 100)));
-                  barStyle = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]';
-                } else {
-                  widthPercent = 0;
-                }
-              } else {
-                // ترنزیشن به سکانس بعد (رو به جلو):
-                // نوار سکانس جاری و قبل از آن پر است
-                // نوار سکانس بعدی (idx === currentIndex + 1) همگام با اسکرول پر می‌شود
-                if (idx <= currentIndex) {
                   widthPercent = 100;
-                  barStyle = idx === currentIndex ? 'bg-amber-400' : 'bg-neutral-400/80';
-                } else if (idx === currentIndex + 1) {
-                  widthPercent = Math.max(0, Math.min(100, Math.round(transitionProgress * 100)));
                   barStyle = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]';
                 } else {
                   widthPercent = 0;
                 }
               }
-            } else {
-              // حالت پایدار (بدون ترنزیشن)
-              if (idx < currentIndex) {
-                widthPercent = 100;
-                barStyle = 'bg-neutral-400/80';
-              } else if (idx === currentIndex) {
-                widthPercent = 100;
-                barStyle = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]';
-              } else {
-                widthPercent = 0;
-              }
-            }
 
-            return (
-              <div
-                key={idx}
-                className="relative h-1 sm:h-1.5 rounded-full overflow-hidden bg-white/20 backdrop-blur-sm"
-              >
+              return (
                 <div
-                  className={`h-full rounded-full transition-all duration-75 ${barStyle}`}
-                  style={{ width: `${widthPercent}%` }}
-                />
-              </div>
-            );
-          })}
+                  key={idx}
+                  className="relative h-1 sm:h-1.5 rounded-full overflow-hidden bg-white/20 backdrop-blur-sm"
+                >
+                  <div
+                    className={`h-full rounded-full transition-all duration-75 ${barStyle}`}
+                    style={{ width: `${widthPercent}%` }}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

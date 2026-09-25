@@ -129,23 +129,14 @@ export default function App() {
     setActiveView('BOOKING');
   };
 
-  // ۱. حالت اختصاصی: صفحه مستقل و تمام‌صفحه رزرواسیون هتل
-  if (activeView === 'BOOKING') {
-    return (
-      <LuxuryBookingPage
-        onBackToExperience={() => setActiveView('EXPERIENCE')}
-      />
-    );
-  }
-
-  // ۲. حالت ادمین: پنل مدیریت جامع هتل (سیستم تم، شخصی‌سازی سایت‌ها، ماتریس دسترسی و گراف)
+  // ۱. حالت ادمین: پنل مدیریت جامع هتل (سیستم تم، شخصی‌سازی سایت‌ها، ماتریس دسترسی و گراف)
   if (activeView === 'ADMIN') {
     return (
       <AdminDashboard onReturnToExperience={() => setActiveView('EXPERIENCE')} />
     );
   }
 
-  // ۳. حالت اصلی: گشت سینمایی و ویدیویی هتل
+  // ۲. حالت اصلی (شامل گشت سینمایی و ویزارد رزرو داک‌شده مستقیماً زیر هدر اصلی سایت)
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-neutral-950 text-neutral-100 select-none font-sans">
       {/* =========================================================================
@@ -159,22 +150,24 @@ export default function App() {
         onStatusChange={handleStatusChange}
         onTransitionStart={handleTransitionStart}
         onTransitionEnd={handleTransitionEnd}
-        enableScrollScrubbing={true}
+        enableScrollScrubbing={activeView !== 'BOOKING'}
       />
 
       {/* =========================================================================
-          لایه Z-30: اطلاعات فضا، عنوان و دکمه باز کردن صفحه رزرواسیون
+          لایه Z-20: اطلاعات فضا، عنوان و دکمه باز کردن صفحه رزرواسیون (تنها در حالت گشت)
           ========================================================================= */}
-      <SpaceInfoOverlay
-        currentNode={currentNode}
-        isTransitioning={isTransitioning}
-        onOpenBooking={handleOpenBooking}
-        currentIndex={currentIndex !== -1 ? currentIndex : 0}
-        totalScenes={totalScenes}
-      />
+      {activeView !== 'BOOKING' && (
+        <SpaceInfoOverlay
+          currentNode={currentNode}
+          isTransitioning={isTransitioning}
+          onOpenBooking={handleOpenBooking}
+          currentIndex={currentIndex !== -1 ? currentIndex : 0}
+          totalScenes={totalScenes}
+        />
+      )}
 
       {/* =========================================================================
-          لایه Z-40: هدر لوکس هتل + نوار پروگرس موقت در زیر هدر
+          لایه Z-40: هدر لوکس هتل (Main Site Header)
           ========================================================================= */}
       <NavigationTimeline
         isAudioMuted={isAudioMuted}
@@ -189,7 +182,19 @@ export default function App() {
         transitionSourceTitle={transitionSourceTitle}
         transitionTargetTitle={transitionTargetTitle}
         isReverseTransition={isReverseTransition}
+        isBookingOpen={activeView === 'BOOKING'}
       />
+
+      {/* =========================================================================
+          لایه Z-30: ویزارد رزرواسیون کاملاً شفاف و داک‌شده مستقیماً زیر هدر اصلی سایت
+          ========================================================================= */}
+      {activeView === 'BOOKING' && (
+        <div className="absolute inset-x-0 top-[68px] sm:top-[80px] md:top-[88px] bottom-0 z-30 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-amber-400/30">
+          <LuxuryBookingPage
+            onBackToExperience={() => setActiveView('EXPERIENCE')}
+          />
+        </div>
+      )}
     </main>
   );
 }

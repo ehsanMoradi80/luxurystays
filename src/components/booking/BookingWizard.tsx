@@ -29,7 +29,9 @@ import {
   Mail, 
   FileText,
   Clock,
-  KeyRound
+  KeyRound,
+  FastForward,
+  ArrowRight
 } from 'lucide-react';
 import { useThemeAndSiteStore, HotelRoom } from '../../store/useThemeAndSiteStore';
 import { SITE_THEMES } from '../../theme/themeConfig';
@@ -41,6 +43,8 @@ import { CustomButton } from '../ui/CustomButton';
 interface BookingWizardProps {
   initialSpaceTitle?: string;
   onComplete?: () => void;
+  onSkip?: () => void;
+  onClose?: () => void;
 }
 
 interface VIPService {
@@ -80,6 +84,8 @@ const VIP_SERVICES: VIPService[] = [
 export const BookingWizard: React.FC<BookingWizardProps> = ({
   initialSpaceTitle,
   onComplete,
+  onSkip,
+  onClose,
 }) => {
   const { siteTheme, rooms, activeSiteId, sites, addBooking } = useThemeAndSiteStore();
   const currentTheme = SITE_THEMES[siteTheme] || SITE_THEMES.gold;
@@ -87,6 +93,18 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
 
   // مراحل ویزارد: ۱: تقویم | ۲: اقامتگاه | ۳: مشخصات و VIP | ۴: پرداخت فیک | ۵: واچر نهایی
   const [currentStep, setCurrentStep] = useState<number>(1);
+
+  const handleSkip = () => {
+    if (currentStep < 4) {
+      setCurrentStep((prev) => prev + 1);
+    } else if (onSkip) {
+      onSkip();
+    } else if (onClose) {
+      onClose();
+    } else if (onComplete) {
+      onComplete();
+    }
+  };
 
   // وضعیت‌های مرحله ۱: تاریخ و ساعت
   const [startDate, setStartDate] = useState('2026-09-24');
@@ -198,57 +216,61 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
   };
 
   return (
-    <div className="w-full text-right font-sans space-y-6">
+    <div className="w-full text-right font-sans space-y-6 bg-transparent text-neutral-100">
       {/* =========================================================================
-          نوار پیشرفت مراحل ویزارد (Wizard Stepper)
+          هدر ویزارد: کاملاً شفاف، بدون هیچ متن اضافی، برچسب‌های توصیفی یا شمارنده بج
+          دارای اکشن اختصاصی Skip (رد کردن) به جای دکمه ضربدر
           ========================================================================= */}
       {currentStep < 5 && (
-        <div className="flex items-center justify-between border-b border-neutral-800 pb-4">
-          <div className="flex items-center gap-2">
-            {[
-              { num: 1, label: 'زمان و میهمانان' },
-              { num: 2, label: 'انتخاب اقامتگاه' },
-              { num: 3, label: 'خدمات و مشخصات' },
-              { num: 4, label: 'پرداخت فیک' },
-            ].map((step) => {
-              const isActive = currentStep === step.num;
-              const isPassed = currentStep > step.num;
+        <div className="sticky top-0 z-30 px-3 py-2.5 bg-black/40 backdrop-blur-xl border-b border-white/10 rounded-2xl flex items-center justify-between gap-3">
+          {/* دکمه بازگشت */}
+          <button
+            type="button"
+            disabled={currentStep === 1}
+            onClick={() => setCurrentStep((prev) => Math.max(1, prev - 1))}
+            className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-1 backdrop-blur-md transition-all ${
+              currentStep > 1
+                ? 'bg-black/40 border-white/15 text-neutral-300 hover:text-white hover:border-amber-400/50 cursor-pointer'
+                : 'opacity-0 pointer-events-none'
+            }`}
+            aria-label="مرحله قبل"
+          >
+            <ChevronRight className="w-3.5 h-3.5 text-amber-400" />
+            <span className="font-medium">قبلی</span>
+          </button>
+
+          {/* نوار پیشرفت تمیز: بدون متن، بدون برچسب، بدون بج */}
+          <div className="flex-1 max-w-sm flex items-center gap-1.5">
+            {[1, 2, 3, 4].map((stepNum) => {
+              const isActive = currentStep === stepNum;
+              const isPassed = currentStep > stepNum;
 
               return (
-                <div key={step.num} className="flex items-center gap-1.5">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                      isActive
-                        ? 'bg-amber-400 text-neutral-950 shadow-md ring-2 ring-amber-400/30'
-                        : isPassed
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                        : 'bg-neutral-800 text-neutral-400'
-                    }`}
-                  >
-                    {isPassed ? <Check className="w-3.5 h-3.5" /> : step.num}
-                  </div>
-                  <span
-                    className={`text-xs hidden md:inline ${
-                      isActive
-                        ? 'text-white font-bold'
-                        : isPassed
-                        ? 'text-neutral-300'
-                        : 'text-neutral-400'
-                    }`}
-                  >
-                    {step.label}
-                  </span>
-                  {step.num < 4 && (
-                    <span className="text-neutral-700 mx-1 hidden sm:inline">&mdash;</span>
-                  )}
-                </div>
+                <div
+                  key={stepNum}
+                  className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                    isActive
+                      ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]'
+                      : isPassed
+                      ? 'bg-emerald-400/80'
+                      : 'bg-white/15'
+                  }`}
+                />
               );
             })}
           </div>
 
-          <div className="text-[11px] text-neutral-400">
-            مرحله <span className="font-bold text-amber-300">{currentStep}</span> از ۴
-          </div>
+          {/* اکشن اختصاصی Skip (رد کردن) - جایگزین دکمه ضربدر/بستن */}
+          <button
+            type="button"
+            onClick={handleSkip}
+            className="px-3 py-1.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 text-amber-300 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+            title="رد کردن (Skip)"
+            aria-label="رد کردن (Skip)"
+          >
+            <span>رد کردن</span>
+            <FastForward className="w-3.5 h-3.5 text-amber-400" style={{ transform: 'scaleX(-1)' }} />
+          </button>
         </div>
       )}
 

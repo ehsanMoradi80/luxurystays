@@ -13,13 +13,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence, PanInfo } from 'motion/react';
-import { X, ArrowRight } from 'lucide-react';
+import { X, ArrowRight, FastForward } from 'lucide-react';
 import { useThemeAndSiteStore } from '../../store/useThemeAndSiteStore';
 import { RADIUS_CLASSES, SITE_THEMES } from '../../theme/themeConfig';
 
 export interface AdaptiveOverlayProps {
   isOpen: boolean;
   onClose: () => void;
+  onSkip?: () => void;
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
   children: React.ReactNode;
@@ -32,6 +33,7 @@ export interface AdaptiveOverlayProps {
 export const AdaptiveOverlay: React.FC<AdaptiveOverlayProps> = ({
   isOpen,
   onClose,
+  onSkip,
   title,
   subtitle,
   children,
@@ -180,15 +182,27 @@ export const AdaptiveOverlay: React.FC<AdaptiveOverlayProps> = ({
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="p-2 rounded-xl bg-neutral-800/80 hover:bg-neutral-700 text-neutral-400 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 text-xs"
-                  title="بستن پنجره"
-                >
-                  <X className="w-4 h-4" />
-                  <span className="hidden sm:inline">بستن</span>
-                </button>
+                {onSkip ? (
+                  <button
+                    type="button"
+                    onClick={onSkip}
+                    className="px-3.5 py-1.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 hover:border-amber-400 text-amber-300 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold shadow-md active:scale-95"
+                    title="رد کردن (Skip)"
+                  >
+                    <span>رد کردن</span>
+                    <FastForward className="w-3.5 h-3.5 text-amber-400" style={{ transform: 'scaleX(-1)' }} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="p-2 rounded-xl bg-neutral-800/80 hover:bg-neutral-700 text-neutral-400 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 text-xs"
+                    title="بستن پنجره"
+                  >
+                    <X className="w-4 h-4" />
+                    <span className="hidden sm:inline">بستن</span>
+                  </button>
+                )}
               </div>
 
               {/* بدنه ساید شیت */}
@@ -223,13 +237,25 @@ export const AdaptiveOverlay: React.FC<AdaptiveOverlayProps> = ({
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="p-2 rounded-xl bg-neutral-800/80 hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  {onSkip ? (
+                    <button
+                      type="button"
+                      onClick={onSkip}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 hover:border-amber-400 text-amber-300 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold shadow-md active:scale-95"
+                      title="رد کردن (Skip)"
+                    >
+                      <span>رد کردن</span>
+                      <FastForward className="w-3.5 h-3.5 text-amber-400" style={{ transform: 'scaleX(-1)' }} />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="p-2 rounded-xl bg-neutral-800/80 hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
 
                 {/* بدنه مودال */}

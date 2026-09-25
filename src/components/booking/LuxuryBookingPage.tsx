@@ -502,72 +502,73 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
       onTouchCancel={handleTouchCancel}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
-      className="min-h-screen w-full bg-[#070707] text-neutral-100 font-sans flex flex-col relative selection:bg-amber-400 selection:text-neutral-950 pb-24 lg:pb-12 touch-pan-y"
+      className="w-full min-h-full bg-transparent text-neutral-100 font-sans flex flex-col relative selection:bg-amber-400 selection:text-neutral-950 pb-24 lg:pb-12 touch-pan-y"
     >
       {/* =========================================================================
-          نوار اکشن بالا: فقط دکمه‌های بک و اسکیپ بدون متن و بدون ضربدر
+          هدر ویزارد رزرواسیون: کاملاً شفاف، چسبیده و داک‌شده مستقیماً زیر هدر اصلی سایت
+          - حذف کلیه متون اضافی، برچسب‌های توصیفی و شمارنده‌های بج
+          - جایگزینی کامل دکمه بستن/ضربدر با اکشن اختصاصی Skip (رد کردن)
           ========================================================================= */}
       {currentStep < 5 && (
-        <div className="sticky top-0 z-40 px-4 sm:px-8 py-3 bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-800/60 flex items-center justify-between">
-          {/* دکمه شناور بازگشت (Back) - فقط آیکون لوکس بدون متن */}
+        <div className="sticky top-0 z-40 px-4 sm:px-8 py-3 bg-black/40 backdrop-blur-xl border-b border-white/10 flex items-center justify-between gap-3 sm:gap-6">
+          {/* دکمه بازگشت (Back) */}
           <button
             type="button"
             onClick={goToPrevStep}
-            className="group w-10 h-10 rounded-2xl bg-neutral-900/90 border border-neutral-800 hover:border-amber-400/50 text-neutral-300 hover:text-amber-300 flex items-center justify-center backdrop-blur-md transition-all cursor-pointer shadow-lg active:scale-95"
+            className="group px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-black/50 border border-white/15 hover:border-amber-400/50 text-neutral-300 hover:text-amber-300 flex items-center gap-1.5 backdrop-blur-md transition-all cursor-pointer shadow-lg active:scale-95 text-xs shrink-0"
             title={currentStep === 1 ? 'بازگشت به تور' : 'مرحله قبل'}
             aria-label="بازگشت"
           >
-            <ArrowRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className="w-4 h-4 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
+            <span className="hidden sm:inline font-medium">{currentStep === 1 ? 'بازگشت' : 'قبلی'}</span>
           </button>
 
-          {/* دکمه شناور اسکیپ (Skip) - بدون ضربدر و بدون متن */}
-          <button
-            type="button"
-            onClick={handleSkip}
-            className="group w-10 h-10 rounded-2xl bg-neutral-900/90 border border-neutral-800 hover:border-amber-400/50 text-neutral-300 hover:text-amber-300 flex items-center justify-center backdrop-blur-md transition-all cursor-pointer shadow-lg active:scale-95"
-            title="اسکیپ به مرحله بعد"
-            aria-label="اسکیپ"
-          >
-            <FastForward className="w-4 h-4 text-amber-400 group-hover:-translate-x-0.5 transition-transform" style={{ transform: 'scaleX(-1)' }} />
-          </button>
-        </div>
-      )}
-
-      {/* خط راهنمای بصری استپ‌ها در زیر کنترل‌های بالا (فقط پروگرس‌بار بدون هیچ متنی) */}
-      {currentStep < 5 && (
-        <div className="w-full bg-neutral-950 px-4 sm:px-8 py-2.5 border-b border-neutral-900">
-          <div className="max-w-5xl mx-auto flex items-center justify-between gap-1.5 sm:gap-2.5">
-            {stepsList.slice(0, 4).map((s) => {
-              const isActive = currentStep === s.num;
-              const isDone = currentStep > s.num;
+          {/* نوار پیشرفت مراحل: فقط خطوط پیشرفت تمیز و مینیمال بدون هیچ متن، شماره، عنوان یا بج */}
+          <div className="flex-1 max-w-xl flex items-center gap-1.5 sm:gap-2.5">
+            {[1, 2, 3, 4].map((stepNum) => {
+              const isActive = currentStep === stepNum;
+              const isDone = currentStep > stepNum;
 
               return (
                 <button
-                  key={s.num}
+                  key={stepNum}
                   type="button"
                   onClick={() => {
                     if (isDone) {
                       setSlideDirection(-1);
-                      setCurrentStep(s.num);
+                      setCurrentStep(stepNum);
                     }
                   }}
-                  className={`flex-1 transition-all ${
+                  className={`flex-1 py-1 transition-all ${
                     isDone ? 'cursor-pointer' : 'cursor-default'
                   }`}
+                  aria-label={`مرحله ${stepNum}`}
                 >
                   <div
                     className={`h-1.5 w-full rounded-full transition-all duration-300 ${
                       isActive
-                        ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.6)]'
+                        ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)]'
                         : isDone
-                        ? 'bg-emerald-500/80'
-                        : 'bg-neutral-800'
+                        ? 'bg-emerald-400/80'
+                        : 'bg-white/15'
                     }`}
                   />
                 </button>
               );
             })}
           </div>
+
+          {/* اکشن اختصاصی Skip (رد کردن) - جایگزین کامل دکمه بستن/ضربدر */}
+          <button
+            type="button"
+            onClick={handleSkip}
+            className="group px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 hover:border-amber-400 text-amber-300 hover:text-amber-200 flex items-center gap-1.5 backdrop-blur-md transition-all cursor-pointer shadow-lg active:scale-95 text-xs font-semibold shrink-0"
+            title="رد کردن مرحله (Skip)"
+            aria-label="رد کردن مرحله"
+          >
+            <span className="font-medium">رد کردن</span>
+            <FastForward className="w-3.5 h-3.5 text-amber-400 group-hover:-translate-x-0.5 transition-transform" style={{ transform: 'scaleX(-1)' }} />
+          </button>
         </div>
       )}
 
@@ -603,7 +604,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                     </p>
                   </div>
 
-                  {/* کارت‌های بزرگ اقامتگاه‌ها */}
+                  {/* کارت‌های بزرگ اقامتگاه‌ها با استایل شیشه‌ای لوکس */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {rooms.map((room) => {
                       const isSelected = selectedRoom?.id === room.id;
@@ -614,12 +615,12 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                         <div
                           key={room.id}
                           onClick={() => !isBooked && setSelectedRoom(room)}
-                          className={`rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between ${
+                          className={`rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between backdrop-blur-xl ${
                             isSelected
-                              ? 'bg-neutral-900 border-amber-400 ring-2 ring-amber-400/40 shadow-2xl shadow-amber-400/10 scale-[1.01]'
+                              ? 'bg-black/60 border-amber-400 ring-2 ring-amber-400/40 shadow-2xl shadow-amber-400/10 scale-[1.01]'
                               : isBooked
-                              ? 'bg-neutral-950 border-neutral-800 opacity-40 cursor-not-allowed'
-                              : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 cursor-pointer hover:shadow-xl'
+                              ? 'bg-black/40 border-neutral-800/80 opacity-40 cursor-not-allowed'
+                              : 'bg-black/45 border-white/10 hover:border-amber-400/40 cursor-pointer hover:shadow-xl'
                           }`}
                         >
                           <div>
@@ -809,17 +810,17 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                           <div
                             key={service.id}
                             onClick={() => toggleVipService(service.id)}
-                            className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3.5 ${
+                            className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3.5 backdrop-blur-xl ${
                               isChecked
-                                ? 'bg-amber-400/10 border-amber-400 ring-1 ring-amber-400/30'
-                                : 'bg-neutral-900/90 border-neutral-800 hover:border-neutral-700'
+                                ? 'bg-amber-400/15 border-amber-400 ring-1 ring-amber-400/30'
+                                : 'bg-black/45 border-white/10 hover:border-neutral-600'
                             }`}
                           >
                             <div
                               className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 border ${
                                 isChecked
                                   ? 'bg-amber-400 border-amber-400 text-neutral-950 font-black'
-                                  : 'border-neutral-600 bg-neutral-950'
+                                  : 'border-neutral-600 bg-black/60'
                               }`}
                             >
                               {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -843,8 +844,8 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                   </div>
 
                   {/* فرم اطلاعات سرپرست اقامت */}
-                  <div className="bg-neutral-900/80 border border-neutral-800 rounded-3xl p-5 sm:p-6 space-y-4">
-                    <div className="text-xs font-bold text-white flex items-center gap-1.5 border-b border-neutral-800 pb-2.5">
+                  <div className="bg-black/50 border border-white/10 rounded-3xl p-5 sm:p-6 space-y-4 backdrop-blur-xl">
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5 border-b border-white/10 pb-2.5">
                       <User className="w-4 h-4 text-amber-400" />
                       <span>مشخصات سرپرست رزرو و گیرنده واچر رسمی:</span>
                     </div>
@@ -885,25 +886,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                     />
                   </div>
 
-                  <div className="flex items-center justify-between pt-4 border-t border-neutral-800">
-                    <button
-                      type="button"
-                      onClick={goToPrevStep}
-                      className="px-4 py-2.5 rounded-xl text-xs text-neutral-400 hover:text-white flex items-center gap-1 cursor-pointer"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                      <span>مرحله قبل</span>
-                    </button>
-
-                    <CustomButton
-                      size="lg"
-                      variant="primary"
-                      rightIcon={<ChevronLeft className="w-5 h-5" />}
-                      onClick={goToNextStep}
-                    >
-                      مشاهده پیش‌فاکتور و تسویه آزمایشی
-                    </CustomButton>
-                  </div>
+                  
                 </div>
               )}
 
@@ -923,20 +906,20 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                   </div>
 
                   {/* پیش‌فاکتور شفاف */}
-                  <div className="bg-neutral-900/90 border border-neutral-800 rounded-3xl p-5 sm:p-6 space-y-3.5">
-                    <div className="flex items-center justify-between text-xs sm:text-sm text-neutral-300 border-b border-neutral-800 pb-3">
+                  <div className="bg-black/50 border border-white/10 rounded-3xl p-5 sm:p-6 space-y-3.5 backdrop-blur-xl">
+                    <div className="flex items-center justify-between text-xs sm:text-sm text-neutral-300 border-b border-white/10 pb-3">
                       <span>{selectedRoom?.title} ({toPersianDigits(totalNights)} شب اقامت)</span>
                       <span className="font-bold text-white">{formatPersianPrice(roomCostTotal)}</span>
                     </div>
 
                     {selectedVipServices.length > 0 && (
-                      <div className="flex items-center justify-between text-xs sm:text-sm text-neutral-300 border-b border-neutral-800 pb-3">
+                      <div className="flex items-center justify-between text-xs sm:text-sm text-neutral-300 border-b border-white/10 pb-3">
                         <span>خدمات تشریفاتی VIP ({toPersianDigits(selectedVipServices.length)} مورد)</span>
                         <span className="font-bold text-white">{formatPersianPrice(vipServicesTotal)}</span>
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between text-xs text-neutral-400 border-b border-neutral-800 pb-3">
+                    <div className="flex items-center justify-between text-xs text-neutral-400 border-b border-white/10 pb-3">
                       <span>مالیات بر ارزش افزوده و حق سرویس تشریفات ({toPersianDigits(9)}٪)</span>
                       <span>{formatPersianPrice(taxesAndService)}</span>
                     </div>
@@ -950,8 +933,8 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                   </div>
 
                   {/* شبیه‌ساز پرداخت شتاب */}
-                  <div className="bg-neutral-900 border border-amber-400/50 rounded-3xl p-6 shadow-2xl space-y-4">
-                    <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                  <div className="bg-black/60 border border-amber-400/50 rounded-3xl p-6 shadow-2xl space-y-4 backdrop-blur-xl">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
                       <div className="flex items-center gap-2">
                         <Lock className="w-4 h-4 text-emerald-400" />
                         <span className="text-xs font-bold text-white">درگاه شبیه‌ساز پرداخت شتاب (Sandbox)</span>
@@ -1169,8 +1152,8 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
             ========================================================================= */}
         {currentStep < 5 && (
           <aside className="w-full lg:w-80 shrink-0 sticky top-20 space-y-4">
-            <div className="bg-neutral-900/90 border border-neutral-800 rounded-3xl p-5 shadow-2xl space-y-4 backdrop-blur-xl">
-              <h3 className="text-xs font-bold text-amber-300 uppercase tracking-wider border-b border-neutral-800 pb-3 flex items-center justify-between">
+            <div className="bg-black/50 border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4 backdrop-blur-xl">
+              <h3 className="text-xs font-bold text-amber-300 uppercase tracking-wider border-b border-white/10 pb-3 flex items-center justify-between">
                 <span>خلاصه اقامت شما</span>
                 <span className="text-neutral-400 font-normal">{toPersianDigits(totalNights)} شب</span>
               </h3>
@@ -1181,7 +1164,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                   src={selectedRoom?.imageUrl}
                   alt={selectedRoom?.title}
                   referrerPolicy="no-referrer"
-                  className="w-16 h-16 rounded-2xl object-cover border border-neutral-700 shrink-0"
+                  className="w-16 h-16 rounded-2xl object-cover border border-white/10 shrink-0"
                 />
                 <div>
                   <h4 className="text-xs font-bold text-white line-clamp-1">{autoPersianText(selectedRoom?.title)}</h4>
@@ -1195,7 +1178,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
               </div>
 
               {/* تاریخ و ساعت اقامت */}
-              <div className="bg-neutral-950/80 p-3.5 rounded-2xl border border-neutral-800/80 text-xs space-y-2">
+              <div className="bg-black/60 p-3.5 rounded-2xl border border-white/10 text-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-neutral-400">ورود:</span>
                   <span className="text-white font-semibold">{toPersianDigits(startDate)} &bull; {startTime}</span>
@@ -1204,7 +1187,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                   <span className="text-neutral-400">خروج:</span>
                   <span className="text-white font-semibold">{toPersianDigits(endDate)} &bull; {endTime}</span>
                 </div>
-                <div className="flex items-center justify-between pt-1 border-t border-neutral-800">
+                <div className="flex items-center justify-between pt-1 border-t border-white/10">
                   <span className="text-neutral-400">میهمانان:</span>
                   <span className="text-neutral-200">{toPersianDigits(guestCount)} نفر</span>
                 </div>
@@ -1212,7 +1195,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
 
               {/* سرویس‌های انتخابی */}
               {selectedVipServices.length > 0 && (
-                <div className="text-xs space-y-1.5 border-t border-neutral-800 pt-3">
+                <div className="text-xs space-y-1.5 border-t border-white/10 pt-3">
                   <span className="text-neutral-400 block mb-1">خدمات تشریفاتی VIP:</span>
                   {selectedVipServices.map((id) => {
                     const s = VIP_SERVICES.find((v) => v.id === id);
@@ -1227,7 +1210,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
               )}
 
               {/* مجموع کل */}
-              <div className="border-t border-neutral-800 pt-3 flex items-center justify-between">
+              <div className="border-t border-white/10 pt-3 flex items-center justify-between">
                 <div>
                   <span className="text-[11px] text-neutral-400 block">مبلغ کل قابل پرداخت:</span>
                   <span className="text-base font-black text-amber-400">{formatPersianPrice(grandTotal)}</span>
@@ -1243,7 +1226,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
           دسترسی راحت با شست دست در گوشی‌های هوشمند
           ========================================================================= */}
       {currentStep < 5 && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-neutral-950/95 backdrop-blur-2xl border-t border-neutral-800/90 px-4 py-3 shadow-[0_-5px_25px_rgba(0,0,0,0.8)] flex items-center justify-between gap-3">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-black/80 backdrop-blur-2xl border-t border-white/10 px-4 py-3 shadow-[0_-5px_25px_rgba(0,0,0,0.8)] flex items-center justify-between gap-3">
           <div>
             <span className="text-[10px] text-neutral-400 block">مبلغ قابل پرداخت ({toPersianDigits(totalNights)} شب):</span>
             <span className="text-sm font-black text-amber-300">{formatPersianPrice(grandTotal)}</span>
@@ -1254,7 +1237,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
               <button
                 type="button"
                 onClick={goToPrevStep}
-                className="px-3 py-2.5 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-300 text-xs font-semibold cursor-pointer active:scale-95"
+                className="px-3 py-2 rounded-xl bg-black/60 border border-white/20 text-neutral-300 text-xs font-semibold cursor-pointer active:scale-95"
               >
                 قبل
               </button>
@@ -1263,7 +1246,7 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
             <button
               type="button"
               onClick={goToNextStep}
-              className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-black shadow-lg shadow-amber-400/25 flex items-center gap-1.5 cursor-pointer active:scale-95"
+              className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-black shadow-lg shadow-amber-400/25 flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
               <span>{currentStep === 4 ? 'پرداخت و صدور واچر' : 'گام بعدی'}</span>
               <ChevronLeft className="w-4 h-4" />
