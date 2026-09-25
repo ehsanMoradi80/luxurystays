@@ -196,6 +196,27 @@ export class AudioAmbienceEngine {
     osc.stop(t + 1.3);
   }
 
+  public playTick() {
+    if (!this.ctx || !this.masterGain || this.isMuted) return;
+    try {
+      const t = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1046.5, t);
+
+      gain.gain.setValueAtTime(0.04, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(t);
+      osc.stop(t + 0.08);
+    } catch {}
+  }
+
   /**
    * Pre-heats the Web Audio context and warms sound synthesis parameters / buffers
    * for adjacent nodes so switching sound profiles has zero initial latency.

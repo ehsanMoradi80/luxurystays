@@ -37,14 +37,26 @@ import {
   AlertCircle,
   XCircle,
   CreditCard,
-  UserCheck
+  UserCheck,
+  Map,
+  Video,
+  Image as ImageIcon,
+  Upload,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Trash2,
+  MapPin,
+  Compass
 } from 'lucide-react';
 import { 
   useThemeAndSiteStore, 
   SiteThemeId, 
   PanelThemeId, 
   RadiusToken, 
-  OverlayPreference 
+  OverlayPreference,
+  MapHotspot
 } from '../../store/useThemeAndSiteStore';
 import { SITE_THEMES, PANEL_THEMES, RADIUS_CLASSES } from '../../theme/themeConfig';
 import { CustomButton } from '../ui/CustomButton';
@@ -55,6 +67,7 @@ import { CustomTabs } from '../ui/CustomTabs';
 import { CustomBadge } from '../ui/CustomBadge';
 import { AdaptiveOverlay } from '../ui/AdaptiveOverlay';
 import { FlowCanvas } from '../FlowCanvas';
+import { HotelMapManagerTab } from './HotelMapManagerTab';
 import { toPersianDigits, formatPersianPrice } from '../../utils/jalali';
 
 interface AdminDashboardProps {
@@ -100,6 +113,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onReturnToExperi
 
   const adminTabs = [
     { id: 'themes', label: 'سیستم تم و ظاهر', icon: <Palette className="w-4 h-4" /> },
+    { id: 'map', label: 'مدیریت نقشه هتل (تصویر/ویدیو)', icon: <Map className="w-4 h-4" /> },
     { id: 'sites', label: 'شخصی‌سازی سایت‌ها', icon: <Building2 className="w-4 h-4" /> },
     { id: 'inventory', label: 'اتاق‌ها و ماتریس دسترسی', icon: <CalendarDays className="w-4 h-4" /> },
     { id: 'playground', label: 'کارگاه کامپوننت‌ها', icon: <Sliders className="w-4 h-4" /> },
@@ -314,6 +328,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onReturnToExperi
             </div>
           </div>
         )}
+
+        {/* ---------------------------------------------------------------------
+            تب مدیریت نقشه هتل: تصویر یا ویدیو و نشانگرهای تعاملی
+            --------------------------------------------------------------------- */}
+        {activeTab === 'map' && <HotelMapManagerTab />}
 
         {/* ---------------------------------------------------------------------
             تب ۲: شخصی‌سازی سایت‌ها و کامپوننت‌های اختصاصی هر سایت

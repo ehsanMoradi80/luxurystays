@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { Volume2, VolumeX, SlidersHorizontal, Settings } from 'lucide-react';
+import { Volume2, VolumeX, SlidersHorizontal, Map } from 'lucide-react';
 import { SpaceNode } from '../types/cms';
 import { useThemeAndSiteStore } from '../store/useThemeAndSiteStore';
 
@@ -19,6 +19,7 @@ interface NavigationTimelineProps {
   isAdmin?: boolean;
   onOpenFlowCanvas?: () => void;
   onOpenAdmin?: () => void;
+  onOpenMap?: () => void;
   currentIndex: number;
   totalScenes: number;
   currentNode: SpaceNode;
@@ -36,6 +37,7 @@ export const NavigationTimeline: React.FC<NavigationTimelineProps> = ({
   isAdmin = false,
   onOpenFlowCanvas,
   onOpenAdmin,
+  onOpenMap,
   currentIndex,
   totalScenes,
   isTransitioning = false,
@@ -82,16 +84,16 @@ export const NavigationTimeline: React.FC<NavigationTimelineProps> = ({
             )}
           </button>
 
-          {/* دکمه دسترسی به پنل مدیریت تم، کامپوننت‌ها و رزرواسیون */}
-          {onOpenAdmin && (
+          {/* دکمه نقشه هتل (جایگزین دکمه تنظیمات طبق درخواست) */}
+          {onOpenMap && (
             <button
-              id="btn-open-admin-dashboard"
-              onClick={onOpenAdmin}
-              className="px-3.5 py-1.5 rounded-full bg-black/60 border border-amber-400/50 text-amber-300 text-xs flex items-center gap-1.5 cursor-pointer backdrop-blur-xl hover:bg-amber-400/20 transition-all shadow-lg active:scale-95"
-              title="ورود به پنل ادمین (سیستم تم، کامپوننت‌های اختصاصی و ماتریس دسترسی)"
+              id="btn-open-hotel-map"
+              onClick={onOpenMap}
+              className="px-3.5 py-1.5 rounded-full bg-black/60 border border-amber-400/60 hover:border-amber-400 text-amber-300 text-xs flex items-center gap-1.5 cursor-pointer backdrop-blur-xl hover:bg-amber-400/20 transition-all shadow-lg active:scale-95"
+              title="مشاهده نقشه و پلان فضایی هتل"
             >
-              <Settings className="w-3.5 h-3.5" />
-              <span className="text-[11px] font-medium hidden sm:inline">پنل تم و ادمین</span>
+              <Map className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-[11px] font-semibold">نقشه هتل</span>
             </button>
           )}
 

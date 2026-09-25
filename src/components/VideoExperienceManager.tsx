@@ -1159,12 +1159,82 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
     // متدهای بیرونی در صورت نیاز به کنترل دستوری
     React.useImperativeHandle(ref, () => ({
       transitionTo: (targetId: string) => {
-        const edge = currentNodeRef.current.transitions.find((t) => t.targetNodeId === targetId);
-        if (edge) initTransition(edge, 0, false);
+        if (targetId === currentNodeRef.current.id) return;
+        const currentIdx = graph.nodes.findIndex((n) => n.id === currentNodeRef.current.id);
+        const targetIdx = graph.nodes.findIndex((n) => n.id === targetId);
+        const isRev = targetIdx !== -1 && currentIdx !== -1 && targetIdx < currentIdx;
+
+        let edge = currentNodeRef.current.transitions.find((t) => t.targetNodeId === targetId);
+        if (!edge) {
+          const tgt = graph.nodes.find((n) => n.id === targetId);
+          if (!tgt) return;
+          edge = {
+            targetNodeId: tgt.id,
+            label: `انتقال به ${tgt.title}`,
+            triggerType: 'click',
+            direction: isRev ? 'backward' : 'forward',
+            video: tgt.ambientLoop,
+          };
+        }
+
+        initTransition(edge, 0, isRev, () => {
+          if (autoPlayTweenRef.current) {
+            autoPlayTweenRef.current.kill();
+          }
+          const animProxy = { progress: 0 };
+          autoPlayTweenRef.current = gsap.to(animProxy, {
+            progress: 1,
+            duration: 0.9,
+            ease: "power3.out",
+            onUpdate: () => {
+              const p = animProxy.progress;
+              progressRef.current = p;
+              setTransitionProgress(p);
+              if (scrubTimelineRef.current) {
+                scrubTimelineRef.current.progress(p);
+              }
+              onStatusChange?.('TRANSITIONING', p, {
+                sourceTitle: currentNodeRef.current.title,
+                targetTitle: edge?.label || 'سکانس مقصد',
+                isReverse: isRev,
+              });
+            },
+            onComplete: () => {
+              completeArrival(targetId);
+            }
+          });
+        });
       },
       transitionBackward: () => {
         const res = getBackwardTransition();
-        if (res) initTransition(res.edge, 0, true);
+        if (!res) return;
+        initTransition(res.edge, 0, true, () => {
+          if (autoPlayTweenRef.current) {
+            autoPlayTweenRef.current.kill();
+          }
+          const animProxy = { progress: 0 };
+          autoPlayTweenRef.current = gsap.to(animProxy, {
+            progress: 1,
+            duration: 0.9,
+            ease: "power3.out",
+            onUpdate: () => {
+              const p = animProxy.progress;
+              progressRef.current = p;
+              setTransitionProgress(p);
+              if (scrubTimelineRef.current) {
+                scrubTimelineRef.current.progress(p);
+              }
+              onStatusChange?.('TRANSITIONING', p, {
+                sourceTitle: currentNodeRef.current.title,
+                targetTitle: res.edge.label,
+                isReverse: true,
+              });
+            },
+            onComplete: () => {
+              completeArrival(res.edge.targetNodeId);
+            }
+          });
+        });
       },
       scrubToProgress: (prog: number) => {
         const clamped = Math.max(0, Math.min(1, prog));

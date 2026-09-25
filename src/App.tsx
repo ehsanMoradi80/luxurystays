@@ -19,6 +19,7 @@ import {
   VideoManagerHandle 
 } from './components/VideoExperienceManager';
 import { SpaceInfoOverlay } from './components/SpaceInfoOverlay';
+import { HotelMapPage } from './components/map/HotelMapPage';
 import { NavigationTimeline } from './components/NavigationTimeline';
 import { LuxuryBookingPage } from './components/booking/LuxuryBookingPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
@@ -40,10 +41,13 @@ export default function App() {
     return false;
   });
 
-  const [activeView, setActiveView] = useState<'EXPERIENCE' | 'BOOKING' | 'ADMIN'>(() => {
+  const [activeView, setActiveView] = useState<'EXPERIENCE' | 'BOOKING' | 'ADMIN' | 'MAP'>(() => {
     if (typeof window !== 'undefined') {
       if (window.location.search.includes('admin') || window.location.hash.includes('admin')) {
         return 'ADMIN';
+      }
+      if (window.location.search.includes('map') || window.location.hash.includes('map')) {
+        return 'MAP';
       }
       if (window.location.search.includes('booking') || window.location.hash.includes('booking')) {
         return 'BOOKING';
@@ -129,6 +133,19 @@ export default function App() {
     setActiveView('BOOKING');
   };
 
+  // پرش مستقیم به صحنه‌های نقشه فضایی
+  const handleJumpToScene = useCallback(
+    (targetNodeId: string) => {
+      if (targetNodeId === currentNodeId) return;
+      if (videoManagerRef.current) {
+        videoManagerRef.current.transitionTo(targetNodeId);
+      } else {
+        setCurrentNodeId(targetNodeId);
+      }
+    },
+    [currentNodeId]
+  );
+
   // ۱. حالت ادمین: پنل مدیریت جامع هتل (سیستم تم، شخصی‌سازی سایت‌ها، ماتریس دسترسی و گراف)
   if (activeView === 'ADMIN') {
     return (
@@ -136,7 +153,25 @@ export default function App() {
     );
   }
 
-  // ۲. حالت اصلی (شامل گشت سینمایی و ویزارد رزرو داک‌شده مستقیماً زیر هدر اصلی سایت)
+  // ۲. حالت صفحه تمام‌صفحه نقشه و پلان معماری هتل (تصویر یا ویدیو با نشانگرهای تعاملی و دکمه بک)
+  if (activeView === 'MAP') {
+    return (
+      <HotelMapPage
+        graph={graph}
+        currentNodeId={currentNodeId}
+        onBack={() => setActiveView('EXPERIENCE')}
+        onSelectScene={(targetNodeId) => {
+          setActiveView('EXPERIENCE');
+          setTimeout(() => {
+            handleJumpToScene(targetNodeId);
+          }, 50);
+        }}
+        onOpenAdmin={() => setActiveView('ADMIN')}
+      />
+    );
+  }
+
+  // ۳. حالت اصلی (شامل گشت سینمایی و ویزارد رزرو داک‌شده مستقیماً زیر هدر اصلی سایت)
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-neutral-950 text-neutral-100 select-none font-sans">
       {/* =========================================================================
@@ -174,6 +209,7 @@ export default function App() {
         onToggleAudio={handleToggleAudio}
         isAdmin={isAdmin}
         onOpenAdmin={() => setActiveView('ADMIN')}
+        onOpenMap={() => setActiveView('MAP')}
         currentIndex={currentIndex !== -1 ? currentIndex : 0}
         totalScenes={totalScenes}
         currentNode={currentNode}
