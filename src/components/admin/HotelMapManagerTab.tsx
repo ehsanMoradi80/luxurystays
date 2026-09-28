@@ -6,8 +6,7 @@
  * - بارگذاری تصویر پلان یا ویدیوی لوپ مجزا برای هر طبقه به صورت مستقل
  * - تنظیم آدرس URL یا آپلود مستقیم فایل از کامپیوتر برای هر طبقه
  * - پالت پیش‌فرض‌های آماده باکیفیت معماری و ویدیوهای هوایی
- * - مدیریت نقاط تعاملی ورود به فضاها برای هر طبقه
- * - مدیریت کامل تورهای ۳۶۰ درجه برای هر اتاق و بخش‌های داخلی
+ * - مدیریت نقاط تعاملی ورود به سکانس‌ها و تعریف زیرسکانس‌های هر فضا (مانند سالن، خواب، تراس)
  * - پیش‌نمایش زنده و همزمان طبقه انتخاب‌شده
  */
 
@@ -29,16 +28,12 @@ import {
   Compass, 
   Sliders, 
   Layers,
-  Sparkles,
-  ChevronDown,
-  ChevronUp,
-  X
+  Sparkles
 } from 'lucide-react';
 import { 
   useThemeAndSiteStore, 
   MapHotspot, 
-  FloorEnvironment, 
-  Tour360Node 
+  FloorEnvironment 
 } from '../../store/useThemeAndSiteStore';
 import { toPersianDigits } from '../../utils/jalali';
 
@@ -95,11 +90,14 @@ const PRESET_MAP_MEDIA: PresetItem[] = [
 ];
 
 const SCENE_OPTIONS = [
-  { value: 'gate', label: 'درگاه ورودی و حیاط سرو' },
-  { value: 'lobby', label: 'تالار و لابی مرمرین' },
-  { value: 'suite', label: 'سوئیت پنت‌هاوس' },
-  { value: 'dining', label: 'رستوران آمبروزیا' },
-  { value: 'pool', label: 'استخر و واحه ساحلی' },
+  { value: 'suite', label: 'سوئیت اقامتی لوکس (Suite)' },
+  { value: 'room', label: 'اتاق رویال دلوکس (Deluxe Room)' },
+  { value: 'cafe', label: 'کافه و روف‌تاپ لانژ (Cafe & Lounge)' },
+  { value: 'gameroom', label: 'گیم‌روم و کلاب تفریحی (Game Room)' },
+  { value: 'dining', label: 'رستوران و هنر آشپزی (Dining)' },
+  { value: 'pool', label: 'استخر و واحه ساحلی (Pool & Cabanas)' },
+  { value: 'lobby', label: 'تالار تشریفات و لابی (Grand Lobby)' },
+  { value: 'gate', label: 'درگاه ورودی قصر (Entrance Gate)' },
 ];
 
 export const HotelMapManagerTab: React.FC = () => {
@@ -112,7 +110,9 @@ export const HotelMapManagerTab: React.FC = () => {
     removeFloor,
     addFloorHotspot,
     updateFloorHotspot,
-    removeFloorHotspot
+    removeFloorHotspot,
+    packages,
+    dedicatedExperiences
   } = useThemeAndSiteStore();
 
   const selectedFloor = floors.find((f) => f.id === activeFloorId) || floors[0];
@@ -121,12 +121,7 @@ export const HotelMapManagerTab: React.FC = () => {
   const [previewPlaying, setPreviewPlaying] = useState(true);
   const [previewMuted, setPreviewMuted] = useState(true);
 
-  // مودال ویرایش تور ۳۶۰ برای یک هات‌اسپات خاص
-  const [editing360HotspotId, setEditing360HotspotId] = useState<string | null>(null);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const panoUploadRef = useRef<HTMLInputElement>(null);
-  const currentPanoEditingNodeRef = useRef<string | null>(null);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
 
   const triggerSaveFlash = () => {
@@ -160,30 +155,6 @@ export const HotelMapManagerTab: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // آپلود مستقیم تصویر ۳۶۰ درجه پانوراما برای نود مشخص
-  const handlePanoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const targetNodeId = currentPanoEditingNodeRef.current;
-    if (!file || !selectedFloor || !editing360HotspotId || !targetNodeId) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      const hs = selectedFloor.hotspots.find((h) => h.id === editing360HotspotId);
-      if (!hs || !hs.tour360Nodes) return;
-
-      const updatedNodes = hs.tour360Nodes.map((n) =>
-        n.id === targetNodeId ? { ...n, panoramaUrl: dataUrl } : n
-      );
-
-      updateFloorHotspot(selectedFloor.id, editing360HotspotId, {
-        tour360Nodes: updatedNodes,
-      });
-      triggerSaveFlash();
-    };
-    reader.readAsDataURL(file);
-  };
-
   const handleApplyPreset = (preset: PresetItem) => {
     if (!selectedFloor) return;
     updateFloor(selectedFloor.id, {
@@ -210,14 +181,8 @@ export const HotelMapManagerTab: React.FC = () => {
           wing: 'بخش اصلی',
           x: 50,
           y: 50,
-          has360Tour: true,
-          tour360Nodes: [
-            {
-              id: `node-${Date.now()}`,
-              title: 'نمای ۳۶۰ درجه اصلی',
-              panoramaUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=3000&q=85',
-              hotspots: [],
-            },
+          subSequences: [
+            { id: 'lobby', title: 'فضای اصلی' }
           ],
         },
       ],
@@ -232,47 +197,18 @@ export const HotelMapManagerTab: React.FC = () => {
     const newHotspot: MapHotspot = {
       id: `hs-${Date.now()}`,
       nodeId: 'lobby',
-      title: 'نقطه فضایی',
+      title: 'نقطه فضایی جدید',
       level: selectedFloor.name,
       wing: 'بخش اصلی',
       x: 50,
       y: 50,
-      has360Tour: true,
-      tour360Nodes: [
-        {
-          id: `node-${Date.now()}`,
-          title: 'نمای ۳۶۰ درجه اصلی',
-          panoramaUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=3000&q=85',
-          hotspots: [],
-        },
+      subSequences: [
+        { id: 'lobby', title: 'فضای اصلی' }
       ],
     };
     addFloorHotspot(selectedFloor.id, newHotspot);
     triggerSaveFlash();
   };
-
-  // افزودن بخش/اتاق داخلی ۳۶۰ جدید به هات‌اسپات انتخابی
-  const handleAddSubNode = (hotspotId: string) => {
-    if (!selectedFloor) return;
-    const hs = selectedFloor.hotspots.find((h) => h.id === hotspotId);
-    if (!hs) return;
-
-    const currentNodes = hs.tour360Nodes || [];
-    const newNode: Tour360Node = {
-      id: `sub-${Date.now()}`,
-      title: `بخش جدید ${currentNodes.length + 1}`,
-      panoramaUrl: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=3000&q=85',
-      hotspots: [],
-    };
-
-    updateFloorHotspot(selectedFloor.id, hotspotId, {
-      has360Tour: true,
-      tour360Nodes: [...currentNodes, newNode],
-    });
-    triggerSaveFlash();
-  };
-
-  const editingHotspot = selectedFloor?.hotspots.find((h) => h.id === editing360HotspotId);
 
   if (!selectedFloor) return null;
 
@@ -283,10 +219,10 @@ export const HotelMapManagerTab: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <Map className="w-5 h-5 text-amber-400" />
-            <span>مدیریت نقشه، طبقات و تورهای ۳۶۰ درجه هتل</span>
+            <span>مدیریت نقشه، طبقات و مسیرهای هتل</span>
           </h2>
           <p className="text-xs text-neutral-400 mt-1">
-            برای هر طبقه می‌توانید تصویر/ویدیو مجزا تنظیم کرده و برای اتاق‌ها و فضاهای آن تور ۳۶۰ درجه چندبخشی ایجاد نمایید.
+            برای هر طبقه می‌توانید تصویر پلان یا ویدیوی لوپ مجزا بارگذاری کرده و نشانگرهای اتصال به سکانس‌های ویدیویی را تعیین کنید.
           </p>
         </div>
 
@@ -315,7 +251,7 @@ export const HotelMapManagerTab: React.FC = () => {
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-white flex items-center gap-2">
             <Layers className="w-4 h-4 text-amber-400" />
-            <span>انتخاب طبقه یا محیط جهت تنظیم نقشه و تورها:</span>
+            <span>انتخاب طبقه یا محیط جهت تنظیم نقشه:</span>
           </span>
           <button
             type="button"
@@ -522,7 +458,7 @@ export const HotelMapManagerTab: React.FC = () => {
         </div>
 
         {/* =========================================================================
-            ستون پیش‌نمایش زنده + مدیریت پین‌ها و تورهای ۳۶۰ این طبقه
+            ستون پیش‌نمایش زنده + مدیریت پین‌ها و سکانس‌های این طبقه
             ========================================================================= */}
         <div className="lg:col-span-6 space-y-6">
           {/* پیش‌نمایش زنده مدیا برای طبقه جاری */}
@@ -568,7 +504,6 @@ export const HotelMapManagerTab: React.FC = () => {
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
                     <span>{hs.title}</span>
-                    {hs.has360Tour && <span className="text-[8px] bg-amber-400 text-neutral-950 px-1 rounded font-black">360</span>}
                   </div>
                 ))}
               </div>
@@ -607,7 +542,7 @@ export const HotelMapManagerTab: React.FC = () => {
             </div>
           </div>
 
-          {/* پین‌های این طبقه همراه با تنظیمات تور ۳۶۰ */}
+          {/* پین‌های این طبقه همراه با تنظیمات سکانس */}
           <div className="p-5 rounded-2xl bg-neutral-900/80 border border-neutral-800 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-white flex items-center gap-2">
@@ -665,6 +600,48 @@ export const HotelMapManagerTab: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* اتصال به تجربه اختصاصی یا پکیج رزرو */}
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-[11px] text-neutral-400 shrink-0">اتصال به تجربه اختصاصی:</span>
+                    <select
+                      value={hs.experiencePackageId || ''}
+                      onChange={(e) => {
+                        const expId = e.target.value;
+                        const matchingExp = dedicatedExperiences.find((d) => d.id === expId);
+                        if (matchingExp) {
+                          updateFloorHotspot(selectedFloor.id, hs.id, {
+                            experiencePackageId: expId,
+                            title: matchingExp.title,
+                            subSequences: matchingExp.sequences.map((s) => ({
+                              id: s.id,
+                              title: s.title,
+                              description: s.subtitle,
+                            })),
+                          });
+                        } else {
+                          updateFloorHotspot(selectedFloor.id, hs.id, { experiencePackageId: expId });
+                        }
+                      }}
+                      className="w-full px-2 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-300 focus:border-amber-400 focus:outline-none"
+                    >
+                      <option value="">(انتخاب تجربه اختصاصی یا بدون تجربه)</option>
+                      <optgroup label="تجربه‌های اختصاصی هتل (استودیو)">
+                        {dedicatedExperiences.map((exp) => (
+                          <option key={exp.id} value={exp.id}>
+                            {exp.title} (طبقه {exp.floorCode} - {toPersianDigits(exp.sequences.length)} سکانس)
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="سایر پکیج‌های پیش‌فرض">
+                        {packages.map((pkg) => (
+                          <option key={pkg.id} value={pkg.id}>
+                            {pkg.title} ({pkg.priceUnit})
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+
                   {/* تنظیم موقعیت روی نقشه */}
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
@@ -701,176 +678,12 @@ export const HotelMapManagerTab: React.FC = () => {
                       />
                     </div>
                   </div>
-
-                  {/* دکمه مدیریت تور ۳۶۰ درجه این اتاق */}
-                  <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="text-[11px] text-neutral-300 font-medium">
-                        تور ۳۶۰ درجه: {hs.tour360Nodes?.length || 0} بخش داخلی
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setEditing360HotspotId(hs.id)}
-                      className="px-2.5 py-1 rounded-lg bg-amber-400/15 hover:bg-amber-400 text-amber-300 hover:text-neutral-950 border border-amber-400/40 text-[10px] font-bold transition-all cursor-pointer"
-                    >
-                      ویرایش بخش‌های تور ۳۶۰
-                    </button>
-                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
       </div>
-
-      {/* =========================================================================
-          مودال تخصصی مدیریت بخش‌ها و پانورامای ۳۶۰ درجه اتاق
-          ========================================================================= */}
-      {editingHotspot && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xl flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl bg-neutral-900 border border-white/20 rounded-3xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-amber-400" />
-                  <span>مدیریت تور ۳۶۰ درجه: {editingHotspot.title}</span>
-                </h3>
-                <p className="text-xs text-neutral-400 mt-0.5">
-                  بخش‌های مختلف این اتاق یا فضا (مثلاً اتاق خواب، سالن نشیمن، تراس) را تنظیم کنید.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setEditing360HotspotId(null)}
-                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white flex items-center justify-center cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* ورودی مخفی برای آپلود تصویر ۳۶۰ */}
-            <input
-              ref={panoUploadRef}
-              type="file"
-              accept="image/*"
-              onChange={handlePanoUpload}
-              className="hidden"
-            />
-
-            {/* لیست نودهای ۳۶۰ این فضا */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-amber-300">
-                  بخش‌های داخلی ({toPersianDigits(editingHotspot.tour360Nodes?.length || 0)} مورد):
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleAddSubNode(editingHotspot.id)}
-                  className="px-3 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400 text-amber-300 hover:text-neutral-950 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>افزودن بخش داخلی ۳۶۰</span>
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {editingHotspot.tour360Nodes?.map((node, idx) => (
-                  <div
-                    key={node.id}
-                    className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-lg bg-neutral-800 text-amber-400 font-bold text-xs flex items-center justify-center">
-                          {idx + 1}
-                        </span>
-                        <input
-                          type="text"
-                          value={node.title}
-                          onChange={(e) => {
-                            const updated = editingHotspot.tour360Nodes!.map((n) =>
-                              n.id === node.id ? { ...n, title: e.target.value } : n
-                            );
-                            updateFloorHotspot(selectedFloor.id, editingHotspot.id, {
-                              tour360Nodes: updated,
-                            });
-                          }}
-                          className="px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-700 text-xs font-bold text-white focus:border-amber-400 focus:outline-none w-60"
-                        />
-                      </div>
-
-                      {editingHotspot.tour360Nodes!.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = editingHotspot.tour360Nodes!.filter((n) => n.id !== node.id);
-                            updateFloorHotspot(selectedFloor.id, editingHotspot.id, {
-                              tour360Nodes: updated,
-                            });
-                          }}
-                          className="text-xs text-rose-400 hover:text-rose-300 p-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[11px] text-neutral-400">
-                          آدرس تصویر ۳۶۰ درجه پانوراما (Equirectangular):
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            currentPanoEditingNodeRef.current = node.id;
-                            panoUploadRef.current?.click();
-                          }}
-                          className="text-[10px] text-amber-300 hover:text-amber-200 flex items-center gap-1 cursor-pointer"
-                        >
-                          <Upload className="w-3 h-3" />
-                          <span>آپلود عکس ۳۶۰ از رایانه</span>
-                        </button>
-                      </div>
-                      <input
-                        type="text"
-                        value={node.panoramaUrl}
-                        onChange={(e) => {
-                          const updated = editingHotspot.tour360Nodes!.map((n) =>
-                            n.id === node.id ? { ...n, panoramaUrl: e.target.value } : n
-                          );
-                          updateFloorHotspot(selectedFloor.id, editingHotspot.id, {
-                            tour360Nodes: updated,
-                          });
-                        }}
-                        dir="ltr"
-                        className="w-full px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-white font-mono focus:border-amber-400 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-white/10 flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setEditing360HotspotId(null);
-                  triggerSaveFlash();
-                }}
-                className="px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-xs shadow-lg cursor-pointer"
-              >
-                تایید و بستن
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

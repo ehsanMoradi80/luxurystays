@@ -59,6 +59,20 @@ export interface Hotspot {
   };
 }
 
+export interface ExperiencePackage {
+  id: string;
+  title: string;
+  type: 'suite' | 'standalone_experience' | 'facility';
+  tagline: string;
+  floorCode: string;
+  price: number;
+  priceUnit: 'هر شب' | 'هر سانس' | 'هر نفر';
+  includedNodeIds: string[]; // شناسه‌های سکانس‌های ویدیویی شامل شده در این پکیج
+  description: string;
+  coverImageUrl: string;
+  amenities: string[];
+}
+
 export interface SpaceNode {
   /** Unique identifier of the hotel area (e.g. 'gate', 'lobby', 'penthouse') */
   id: string;
@@ -72,6 +86,18 @@ export interface SpaceNode {
   category: string;
   /** Curated editorial description */
   description: string;
+  /** شناسه پکیج یا تجربه والد (مثلاً سوئیت پنت‌هاوس یا رستوران) */
+  parentExperienceId?: string;
+  /** عنوان تجربه والد */
+  experienceTitle?: string;
+  /** آیا این سکانس/تجربه به صورت مجزا قابل رزرو است؟ */
+  isStandaloneBookable?: boolean;
+  /** قیمت رزرو مستقل */
+  standaloneBookingPrice?: number;
+  /** واحد قیمت (هر سانس، هر نفر، هر شب) */
+  bookingUnit?: string;
+  /** کد طبقه هتل (۴، ۲، ۱، G) */
+  floorCode?: string;
   /** Ambient looping video played while user is exploring the space */
   ambientLoop: VideoMediaVariant;
   /** Directed edges/transitions leaving this space */
@@ -85,6 +111,41 @@ export interface SpaceNode {
     tone: 'welcoming_strings' | 'marble_hall_reverb' | 'ocean_breeze' | 'crystal_water' | 'jazz_lounge';
     volume: number;
   };
+}
+
+export interface DedicatedSequence {
+  id: string; // e.g. 'seq-living', 'seq-bedroom', 'seq-terrace'
+  title: string; // 'سالن نشیمن و آتریوم شیشه‌ای'
+  subtitle?: string;
+  description?: string;
+  videoUrl: string; // ambient loop video
+  posterUrl?: string;
+  duration?: number;
+}
+
+export interface DedicatedTransition {
+  id: string;
+  fromSequenceId: string;
+  toSequenceId: string;
+  label: string; // 'گذر به اتاق خواب مستر'
+  videoUrl: string; // transition video
+  duration?: number;
+  direction?: 'forward' | 'backward' | 'ascend' | 'descend' | 'lateral';
+}
+
+export interface DedicatedExperience {
+  id: string; // e.g. 'exp-penthouse', 'exp-michelin-dining', 'exp-thalasso-spa', 'exp-presidential'
+  title: string; // 'سوئیت پنت‌هاوس سلطنتی ۴۲۰ متری'
+  tagline: string; // 'اقامتگاه اختصاصی بر فراز اقیانوس'
+  category: 'suite' | 'dining' | 'spa' | 'lounge' | 'villa' | 'facility' | 'club' | 'room' | 'cafe' | 'gameroom';
+  floorCode: string; // '۴', '۲', '۱', 'G'
+  coverImageUrl: string;
+  price: number;
+  priceUnit: 'هر شب' | 'هر سانس' | 'هر نفر';
+  amenities: string[];
+  description: string;
+  sequences: DedicatedSequence[];
+  transitions: DedicatedTransition[];
 }
 
 export interface HotelExperienceGraph {

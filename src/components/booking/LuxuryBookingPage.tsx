@@ -37,9 +37,10 @@ import {
   FileText,
   ArrowLeft,
   FastForward,
-  SkipForward
+  SkipForward,
+  Play
 } from 'lucide-react';
-import { useThemeAndSiteStore, HotelRoom } from '../../store/useThemeAndSiteStore';
+import { useThemeAndSiteStore, HotelRoom, ExperiencePackage } from '../../store/useThemeAndSiteStore';
 import { 
   toPersianDigits, 
   formatPersianPrice, 
@@ -53,6 +54,7 @@ import { CustomButton } from '../ui/CustomButton';
 
 interface LuxuryBookingPageProps {
   onBackToExperience: () => void;
+  onPreviewExperience?: (sceneId: string) => void;
 }
 
 interface VIPService {
@@ -91,9 +93,13 @@ const VIP_SERVICES: VIPService[] = [
 
 const LOCAL_STORAGE_KEY = 'luxury_palace_booking_wizard_draft_v2';
 
-export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToExperience }) => {
+export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ 
+  onBackToExperience,
+  onPreviewExperience 
+}) => {
   const { 
     rooms, 
+    packages,
     activeSiteId, 
     sites, 
     addBooking, 
@@ -101,6 +107,17 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
   } = useThemeAndSiteStore();
 
   const currentSite = sites[activeSiteId];
+
+  // حالت رزرواسیون: اقامت کامل سوئیت یا تجربه/تفریح اختصاصی مستقل
+  const [bookingCategory, setBookingCategory] = useState<'suite' | 'experience'>('suite');
+
+  // لیست تجارب مستقل قابل رزرو مجزا (مانند رستوران، کافه، اسپا و کلاب ساحلی)
+  const standaloneExperiences = packages.filter((p) => p.type === 'standalone_experience' || p.type === 'facility');
+  const [selectedExperienceId, setSelectedExperienceId] = useState<string>(
+    standaloneExperiences[0]?.id || 'pkg-dining-ambrosia'
+  );
+
+  const selectedExperience = packages.find((p) => p.id === selectedExperienceId) || standaloneExperiences[0];
 
   // بازیابی وضعیت ذخیره‌شده از LocalStorage برای پایداری کامل (Persistence)
   const loadSavedState = () => {
@@ -149,14 +166,10 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
   const [guestEmail, setGuestEmail] = useState(initialDraft?.guestEmail || '');
   const [specialRequests, setSpecialRequests] = useState(initialDraft?.specialRequests || '');
 
-  // پرداخت آزمایشی
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardCvv, setCardCvv] = useState('');
-  const [cardExpMonth, setCardExpMonth] = useState('۰۷');
-  const [cardExpYear, setCardExpYear] = useState('۰۸');
-  const [cardOtp, setCardOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
+  // درگاه‌های پرداخت رسمی شاپرک
+  const [selectedGateway, setSelectedGateway] = useState<'mellat' | 'saman' | 'sadad' | 'zarinpal'>('mellat');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [isRedirectingToBank, setIsRedirectingToBank] = useState(false);
 
   // واچر رسمی
   const [generatedTrackingCode, setGeneratedTrackingCode] = useState('');
@@ -395,8 +408,13 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
   // محاسبه شب‌های اقامت با تقویم جلالی
   const totalNights = calculateJalaliNights(startDate, endDate);
 
-  // محاسبات مالی دقیق
-  const roomCostTotal = (selectedRoom?.pricePerNight || 0) * totalNights;
+  // محاسبات مالی دقیق بر اساس نوع رزرو (سوئیت شبانه یا تجربه تفریحی)
+  const roomCostTotal = bookingCategory === 'suite'
+    ? (selectedRoom?.pricePerNight || 0) * totalNights
+    : (selectedExperience?.priceUnit === 'هر نفر'
+        ? (selectedExperience?.price || 0) * (parseInt(guestCount, 10) || 1)
+        : (selectedExperience?.price || 0));
+
   const vipServicesTotal = selectedVipServices.reduce((sum, sId) => {
     const s = VIP_SERVICES.find((v) => v.id === sId);
     return sum + (s?.price || 0);
@@ -410,30 +428,24 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
     );
   };
 
-  // تکمیل خودکار کارت تست VIP
-  const handleAutoFillTestCard = () => {
-    setCardNumber('۶۰۳۷ - ۹۹۷۵ - ۸۸۲۲ - ۴۴۱۱');
-    setCardCvv('۷۸۲');
-    setCardExpMonth('۰۸');
-    setCardExpYear('۰۸');
-    setCardOtp('۵۲۹۱۴');
-    setOtpSent(true);
-  };
-
-  const handleRequestOtp = () => {
-    setOtpSent(true);
-    setCardOtp('۵۲۹۱۴');
-  };
-
-  // ثبت نهایی پرداخت فیک و صدور واچر
+  // انتقال به درگاه پرداخت رسمی شاپرک و صدور واچر پس از بازگشت
   const handleExecutePayment = () => {
     setIsProcessingPayment(true);
+    setIsRedirectingToBank(true);
 
     setTimeout(() => {
+      const activeTitle = bookingCategory === 'suite' 
+        ? selectedRoom.title 
+        : `تجربه اختصاصی ${selectedExperience?.title || ''}`;
+
+      const activeItemId = bookingCategory === 'suite'
+        ? selectedRoom.id
+        : (selectedExperience?.id || 'exp-standalone');
+
       const newBooking = addBooking({
         siteId: activeSiteId,
-        roomId: selectedRoom.id,
-        roomTitle: selectedRoom.title,
+        roomId: activeItemId,
+        roomTitle: activeTitle,
         guestName: guestName || 'میهمان عالی‌رتبه قصر',
         guestEmail: guestEmail || 'guest@laura-palace.com',
         guestPhone: guestPhone || '۰۹۱۲۰۰۰۰۰۰۰',
@@ -458,9 +470,10 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
 
       setGeneratedTrackingCode(newBooking.trackingCode);
       setIsProcessingPayment(false);
+      setIsRedirectingToBank(false);
       setSlideDirection(1);
       setCurrentStep(5);
-    }, 1500);
+    }, 2000);
   };
 
   const handleCopyCode = () => {
@@ -502,28 +515,38 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
       onTouchCancel={handleTouchCancel}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
-      className="w-full min-h-full bg-transparent text-neutral-100 font-sans flex flex-col relative selection:bg-amber-400 selection:text-neutral-950 pb-24 lg:pb-12 touch-pan-y"
+      className="w-full min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-900 via-neutral-950 to-black text-neutral-100 font-sans flex flex-col relative selection:bg-amber-400 selection:text-neutral-950 pb-24 lg:pb-12 touch-pan-y"
     >
       {/* =========================================================================
-          هدر ویزارد رزرواسیون: کاملاً شفاف، چسبیده و داک‌شده مستقیماً زیر هدر اصلی سایت
-          - حذف کلیه متون اضافی، برچسب‌های توصیفی و شمارنده‌های بج
-          - جایگزینی کامل دکمه بستن/ضربدر با اکشن اختصاصی Skip (رد کردن)
+          هدر اختصاصی و مستقل ویزارد رزرواسیون هتل
+          - طراحی لوکس و کاملاً مستقل از لیوت صفحه اصلی سایت
+          - دکمه بازگشت به سایت، عنوان هتل، نوار پیشرفت مراحل و دکمه Skip
           ========================================================================= */}
-      {currentStep < 5 && (
-        <div className="sticky top-0 z-40 px-4 sm:px-8 py-3 bg-black/40 backdrop-blur-xl border-b border-white/10 flex items-center justify-between gap-3 sm:gap-6">
-          {/* دکمه بازگشت (Back) */}
+      <header className="sticky top-0 z-40 px-4 sm:px-8 py-3.5 bg-neutral-950/80 backdrop-blur-2xl border-b border-white/10 flex items-center justify-between gap-3 sm:gap-6 shadow-2xl">
+        {/* دکمه بازگشت (Back) و نشان هتل */}
+        <div className="flex items-center gap-3 shrink-0">
           <button
             type="button"
             onClick={goToPrevStep}
-            className="group px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-black/50 border border-white/15 hover:border-amber-400/50 text-neutral-300 hover:text-amber-300 flex items-center gap-1.5 backdrop-blur-md transition-all cursor-pointer shadow-lg active:scale-95 text-xs shrink-0"
-            title={currentStep === 1 ? 'بازگشت به تور' : 'مرحله قبل'}
+            className="group px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-black/60 border border-white/15 hover:border-amber-400/50 text-neutral-300 hover:text-amber-300 flex items-center gap-1.5 backdrop-blur-md transition-all cursor-pointer shadow-lg active:scale-95 text-xs shrink-0"
+            title={currentStep === 1 ? 'بازگشت به سایت' : 'مرحله قبل'}
             aria-label="بازگشت"
           >
             <ArrowRight className="w-4 h-4 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
-            <span className="hidden sm:inline font-medium">{currentStep === 1 ? 'بازگشت' : 'قبلی'}</span>
+            <span className="font-medium">{currentStep === 1 ? 'بازگشت به سایت' : 'مرحله قبل'}</span>
           </button>
 
-          {/* نوار پیشرفت مراحل: فقط خطوط پیشرفت تمیز و مینیمال بدون هیچ متن، شماره، عنوان یا بج */}
+          <div className="hidden sm:flex items-center gap-2 border-r border-white/10 pr-3 text-xs">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span className="font-serif text-amber-300/90 font-medium tracking-wide">
+              {currentSite?.name || 'قصر لورا'}
+            </span>
+            <span className="text-neutral-400">&bull; ویزارد رزرواسیون</span>
+          </div>
+        </div>
+
+        {/* نوار پیشرفت مراحل: فقط خطوط پیشرفت تمیز و مینیمال بدون هیچ متن، شماره، عنوان یا بج */}
+        {currentStep < 5 && (
           <div className="flex-1 max-w-xl flex items-center gap-1.5 sm:gap-2.5">
             {[1, 2, 3, 4].map((stepNum) => {
               const isActive = currentStep === stepNum;
@@ -557,8 +580,10 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
               );
             })}
           </div>
+        )}
 
-          {/* اکشن اختصاصی Skip (رد کردن) - جایگزین کامل دکمه بستن/ضربدر */}
+        {/* اکشن اختصاصی Skip (رد کردن) - در مراحل ۱ تا ۴ */}
+        {currentStep < 5 ? (
           <button
             type="button"
             onClick={handleSkip}
@@ -569,8 +594,16 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
             <span className="font-medium">رد کردن</span>
             <FastForward className="w-3.5 h-3.5 text-amber-400 group-hover:-translate-x-0.5 transition-transform" style={{ transform: 'scaleX(-1)' }} />
           </button>
-        </div>
-      )}
+        ) : (
+          <button
+            type="button"
+            onClick={onBackToExperience}
+            className="px-3.5 py-1.5 rounded-xl bg-amber-400 text-neutral-950 font-bold text-xs hover:bg-amber-300 transition-all cursor-pointer shadow-md shrink-0"
+          >
+            اتمام و خروج
+          </button>
+        )}
+      </header>
 
       {/* =========================================================================
           محتوای اصلی رزرواسیون: طراحی دو ستونه با قابلیت سوایپ
@@ -592,131 +625,302 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
               {/* =====================================================================
                   مرحله ۱: انتخاب اقامتگاه و سوئیت مجلل (Room Selection First)
                   ===================================================================== */}
+              {/* =====================================================================
+                  مرحله ۱: انتخاب اقامتگاه یا تجارب مستقل (Room / Experience Selection)
+                  ===================================================================== */}
               {currentStep === 1 && (
                 <div className="space-y-6">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white mb-1.5 flex items-center gap-2">
-                      <Bed className="w-6 h-6 text-amber-400" />
-                      <span>انتخاب اقامتگاه مجلل در {currentSite?.name || 'قصر لورا'}</span>
-                    </h2>
-                    <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed">
-                      سوئیت مورد نظر خود را برگزینید. تمامی فضاها دارای دید پانوراما، مبلمان دست‌ساز و دسترسی مستقیم به امکانات کانسیرژ هستند.
-                    </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-black text-white mb-1.5 flex items-center gap-2">
+                        {bookingCategory === 'suite' ? <Bed className="w-6 h-6 text-amber-400" /> : <Sparkles className="w-6 h-6 text-amber-400" />}
+                        <span>انتخاب اقامتگاه یا تجارب اختصاصی {currentSite?.name || 'قصر لورا'}</span>
+                      </h2>
+                      <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed">
+                        می‌توانید اقامت کامل در سوئیت‌های مجلل (شامل پکیج تجارب) یا هر تجربه مستقل را به صورت جداگانه رزرو کنید.
+                      </p>
+                    </div>
+
+                    {/* تب‌بار لوکس سوئیچ میان «اقامت سوئیت» و «تجارب مستقل» */}
+                    <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-black/60 border border-white/10 w-fit backdrop-blur-xl shrink-0 self-start sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={() => setBookingCategory('suite')}
+                        className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                          bookingCategory === 'suite'
+                            ? 'bg-amber-400 text-neutral-950 shadow-md shadow-amber-400/20'
+                            : 'text-neutral-300 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <Bed className="w-4 h-4" />
+                        <span>اقامت کامل سوئیت‌ها</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBookingCategory('experience')}
+                        className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                          bookingCategory === 'experience'
+                            ? 'bg-amber-400 text-neutral-950 shadow-md shadow-amber-400/20'
+                            : 'text-neutral-300 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span>تجارب و تفریحات مستقل</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {/* کارت‌های بزرگ اقامتگاه‌ها با استایل شیشه‌ای لوکس */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {rooms.map((room) => {
-                      const isSelected = selectedRoom?.id === room.id;
-                      const slotStatus = room.slots[startDate] || 'available';
-                      const isBooked = slotStatus === 'booked';
+                  {/* ۱. نمایش کارت‌های سوئیت‌های مجلل هتل (با تجارب مشمول و دکمه مشاهده ویدیویی) */}
+                  {bookingCategory === 'suite' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      {rooms.map((room) => {
+                        const isSelected = selectedRoom?.id === room.id;
+                        const slotStatus = room.slots[startDate] || 'available';
+                        const isBooked = slotStatus === 'booked';
 
-                      return (
-                        <div
-                          key={room.id}
-                          onClick={() => !isBooked && setSelectedRoom(room)}
-                          className={`rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between backdrop-blur-xl ${
-                            isSelected
-                              ? 'bg-black/60 border-amber-400 ring-2 ring-amber-400/40 shadow-2xl shadow-amber-400/10 scale-[1.01]'
-                              : isBooked
-                              ? 'bg-black/40 border-neutral-800/80 opacity-40 cursor-not-allowed'
-                              : 'bg-black/45 border-white/10 hover:border-amber-400/40 cursor-pointer hover:shadow-xl'
-                          }`}
-                        >
-                          <div>
-                            {/* تصویر سوئیت */}
-                            <div className="relative h-48 sm:h-52 w-full overflow-hidden">
-                              <img
-                                src={room.imageUrl}
-                                alt={room.title}
-                                referrerPolicy="no-referrer"
-                                className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+                        // تجارب مشمول این سوئیت
+                        const includedExperiences = room.id.includes('penthouse')
+                          ? ['سالن پذیرایی ۳۶۰ درجه', 'اتاق خواب رویال مستر', 'تراس معلق با جکوزی روباز', 'سرپیشخدمت اختصاصی']
+                          : room.id.includes('presidential')
+                          ? ['آتریوم سلطنتی', 'باغ مرکبات اختصاصی', 'استخر آبگرم سرپوشیده', 'سینمای خصوصی ۸ نفره']
+                          : ['پاویون سروهای کهن', 'حوض فیروزه‌ای خلوت', 'تراس چوبی مدیتیشن', 'شومینه هیزمی سنگی'];
 
-                              {/* وضعیت لحظه‌ای ظرفیت */}
-                              <div className="absolute top-3 right-3">
-                                {slotStatus === 'available' ? (
-                                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-500/90 text-white backdrop-blur-md shadow-md">
-                                    خالی و آماده تحویل
-                                  </span>
-                                ) : slotStatus === 'limited' ? (
-                                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-500/90 text-neutral-950 backdrop-blur-md shadow-md">
-                                    تنها ۱ اقامتگاه باقیمانده
-                                  </span>
-                                ) : (
-                                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-rose-600 text-white backdrop-blur-md shadow-md">
-                                    تکمیل ظرفیت
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="absolute bottom-3 right-3 left-3 text-right">
-                                <span className="text-xs text-amber-300 font-semibold block drop-shadow-sm">
-                                  {room.viewType}
-                                </span>
-                                <h3 className="text-base sm:text-lg font-bold text-white drop-shadow-md">
-                                  {autoPersianText(room.title)}
-                                </h3>
-                              </div>
-                            </div>
-
-                            {/* مشخصات سوئیت: متراژ و ظرفیت با ارقام فارسی */}
-                            <div className="p-4 sm:p-5 space-y-3">
-                              <div className="flex items-center justify-between text-xs text-neutral-300 border-b border-neutral-800 pb-2.5">
-                                <span className="flex items-center gap-1.5">
-                                  <span>متراژ:</span>
-                                  <strong className="text-white font-bold">
-                                    {toPersianDigits(room.sizeM2)} متر مربع
-                                  </strong>
-                                </span>
-                                <span className="flex items-center gap-1.5">
-                                  <Users className="w-3.5 h-3.5 text-neutral-400" />
-                                  <span>ظرفیت: تا {toPersianDigits(room.capacity)} میهمان</span>
-                                </span>
-                              </div>
-
-                              <div className="flex flex-wrap gap-1.5">
-                                {room.amenities.map((amenity, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="text-[11px] px-2.5 py-1 rounded-xl bg-neutral-800/80 text-neutral-300 border border-neutral-700/60"
-                                  >
-                                    {autoPersianText(amenity)}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* قیمت هر شب و انتخاب */}
-                          <div className="p-4 sm:p-5 pt-0 flex items-center justify-between border-t border-neutral-800/80 mt-2">
+                        return (
+                          <div
+                            key={room.id}
+                            onClick={() => !isBooked && setSelectedRoom(room)}
+                            className={`rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between backdrop-blur-xl ${
+                              isSelected
+                                ? 'bg-black/60 border-amber-400 ring-2 ring-amber-400/40 shadow-2xl shadow-amber-400/10 scale-[1.01]'
+                                : isBooked
+                                ? 'bg-black/40 border-neutral-800/80 opacity-40 cursor-not-allowed'
+                                : 'bg-black/45 border-white/10 hover:border-amber-400/40 cursor-pointer hover:shadow-xl'
+                            }`}
+                          >
                             <div>
-                              <div className="text-[11px] text-neutral-400">نرخ هر شب اقامت:</div>
-                              <div className="text-sm sm:text-base font-bold text-amber-300">
-                                {formatPersianPrice(room.pricePerNight)}
+                              {/* تصویر سوئیت و دکمه مشاهده ویدیویی */}
+                              <div className="relative h-48 sm:h-52 w-full overflow-hidden">
+                                <img
+                                  src={room.imageUrl}
+                                  alt={room.title}
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent" />
+
+                                {/* وضعیت لحظه‌ای ظرفیت */}
+                                <div className="absolute top-3 right-3 flex items-center gap-2">
+                                  {slotStatus === 'available' ? (
+                                    <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-500/90 text-white backdrop-blur-md shadow-md">
+                                      آماده تحویل
+                                    </span>
+                                  ) : slotStatus === 'limited' ? (
+                                    <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-500/90 text-neutral-950 backdrop-blur-md shadow-md">
+                                      ۱ واحد مانده
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-rose-600 text-white backdrop-blur-md shadow-md">
+                                      تکمیل ظرفیت
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* دکمه پیش‌نمایش تجربه ویدیویی در گوشه بالای چپ تصویر */}
+                                <div className="absolute top-3 left-3">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPreviewExperience?.(room.id.includes('atrium') ? 'lobby' : 'suite');
+                                    }}
+                                    className="px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/90 border border-amber-400/50 hover:border-amber-400 text-amber-300 hover:text-amber-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xl active:scale-95 cursor-pointer backdrop-blur-md"
+                                    title="مشاهده سکانس‌های ویدیویی این سوئیت"
+                                  >
+                                    <Play className="w-3.5 h-3.5 fill-current" />
+                                    <span>مشاهده تجربه ویدیویی</span>
+                                  </button>
+                                </div>
+
+                                <div className="absolute bottom-3 right-3 left-3 text-right">
+                                  <span className="text-xs text-amber-300 font-semibold block drop-shadow-sm">
+                                    {room.viewType}
+                                  </span>
+                                  <h3 className="text-base sm:text-lg font-bold text-white drop-shadow-md">
+                                    {autoPersianText(room.title)}
+                                  </h3>
+                                </div>
+                              </div>
+
+                              {/* مشخصات و بخش‌های مشمول سوئیت */}
+                              <div className="p-4 sm:p-5 space-y-3.5">
+                                <div className="flex items-center justify-between text-xs text-neutral-300 border-b border-neutral-800 pb-2.5">
+                                  <span className="flex items-center gap-1.5">
+                                    <span>متراژ:</span>
+                                    <strong className="text-white font-bold">
+                                      {toPersianDigits(room.sizeM2)} متر مربع
+                                    </strong>
+                                  </span>
+                                  <span className="flex items-center gap-1.5">
+                                    <Users className="w-3.5 h-3.5 text-neutral-400" />
+                                    <span>ظرفیت: تا {toPersianDigits(room.capacity)} میهمان</span>
+                                  </span>
+                                </div>
+
+                                {/* بخش ویژه: تجارب مشمول در این سوئیت */}
+                                <div className="space-y-1.5">
+                                  <div className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1">
+                                    <Sparkles className="w-3 h-3 text-amber-400" />
+                                    <span>تجارب مشمول در این پکیج سوئیت:</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {includedExperiences.map((exp, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="text-[11px] px-2.5 py-1 rounded-xl bg-amber-400/10 text-amber-300 border border-amber-400/25"
+                                      >
+                                        {exp}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
                               </div>
                             </div>
 
-                            <button
-                              type="button"
-                              disabled={isBooked}
-                              onClick={() => !isBooked && setSelectedRoom(room)}
-                              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'bg-amber-400 text-neutral-950 font-black shadow-lg shadow-amber-400/20'
-                                  : isBooked
-                                  ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
-                                  : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white'
-                              }`}
-                            >
-                              {isSelected ? 'انتخاب شده ✓' : isBooked ? 'تکمیل ظرفیت' : 'انتخاب این سوئیت'}
-                            </button>
+                            {/* قیمت هر شب و انتخاب */}
+                            <div className="p-4 sm:p-5 pt-0 flex items-center justify-between border-t border-neutral-800/80 mt-2">
+                              <div>
+                                <div className="text-[11px] text-neutral-400">نرخ هر شب اقامت:</div>
+                                <div className="text-sm sm:text-base font-bold text-amber-300">
+                                  {formatPersianPrice(room.pricePerNight)}
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={isBooked}
+                                onClick={() => !isBooked && setSelectedRoom(room)}
+                                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-amber-400 text-neutral-950 font-black shadow-lg shadow-amber-400/20'
+                                    : isBooked
+                                    ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                                    : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white'
+                                }`}
+                              >
+                                {isSelected ? 'انتخاب شده ✓' : isBooked ? 'تکمیل ظرفیت' : 'انتخاب این سوئیت'}
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* ۲. نمایش کارت‌های تجارب و تفریحات مستقل (رستوران، کافه، اسپا، کلاب ساحلی) */}
+                  {bookingCategory === 'experience' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      {standaloneExperiences.map((pkg) => {
+                        const isSelected = selectedExperienceId === pkg.id;
+
+                        return (
+                          <div
+                            key={pkg.id}
+                            onClick={() => setSelectedExperienceId(pkg.id)}
+                            className={`rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between backdrop-blur-xl ${
+                              isSelected
+                                ? 'bg-black/60 border-amber-400 ring-2 ring-amber-400/40 shadow-2xl shadow-amber-400/10 scale-[1.01]'
+                                : 'bg-black/45 border-white/10 hover:border-amber-400/40 cursor-pointer hover:shadow-xl'
+                            }`}
+                          >
+                            <div>
+                              {/* تصویر کاور تجربه و دکمه پیش‌نمایش ویدیویی */}
+                              <div className="relative h-48 sm:h-52 w-full overflow-hidden">
+                                <img
+                                  src={pkg.coverImageUrl}
+                                  alt={pkg.title}
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent" />
+
+                                {/* بج طبقه / مکان */}
+                                <div className="absolute top-3 right-3">
+                                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-400 text-neutral-950 backdrop-blur-md shadow-md">
+                                    طبقه {pkg.floorCode}
+                                  </span>
+                                </div>
+
+                                {/* دکمه پخش پیش‌نمایش ویدیویی */}
+                                <div className="absolute top-3 left-3">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPreviewExperience?.(pkg.includedNodeIds[0] || 'dining');
+                                    }}
+                                    className="px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/90 border border-amber-400/50 hover:border-amber-400 text-amber-300 hover:text-amber-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xl active:scale-95 cursor-pointer backdrop-blur-md"
+                                    title="مشاهده سکانس ویدیویی این تجربه"
+                                  >
+                                    <Play className="w-3.5 h-3.5 fill-current" />
+                                    <span>مشاهده تجربه ویدیویی</span>
+                                  </button>
+                                </div>
+
+                                <div className="absolute bottom-3 right-3 left-3 text-right">
+                                  <span className="text-xs text-amber-300 font-semibold block drop-shadow-sm">
+                                    {pkg.tagline}
+                                  </span>
+                                  <h3 className="text-base sm:text-lg font-bold text-white drop-shadow-md">
+                                    {pkg.title}
+                                  </h3>
+                                </div>
+                              </div>
+
+                              {/* توضیحات و امکانات تجربه */}
+                              <div className="p-4 sm:p-5 space-y-3">
+                                <p className="text-xs text-neutral-300 leading-relaxed line-clamp-2">
+                                  {pkg.description}
+                                </p>
+
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  {pkg.amenities.map((amenity, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="text-[11px] px-2.5 py-1 rounded-xl bg-neutral-800/80 text-neutral-300 border border-neutral-700/60"
+                                    >
+                                      {amenity}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* قیمت و انتخاب تجربه */}
+                            <div className="p-4 sm:p-5 pt-0 flex items-center justify-between border-t border-neutral-800/80 mt-2">
+                              <div>
+                                <div className="text-[11px] text-neutral-400">هزینه رزرو ({pkg.priceUnit}):</div>
+                                <div className="text-sm sm:text-base font-bold text-amber-300">
+                                  {formatPersianPrice(pkg.price)}
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => setSelectedExperienceId(pkg.id)}
+                                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-amber-400 text-neutral-950 font-black shadow-lg shadow-amber-400/20'
+                                    : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white'
+                                }`}
+                              >
+                                {isSelected ? 'انتخاب شده ✓' : 'انتخاب این تجربه'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -908,7 +1112,12 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                   {/* پیش‌فاکتور شفاف */}
                   <div className="bg-black/50 border border-white/10 rounded-3xl p-5 sm:p-6 space-y-3.5 backdrop-blur-xl">
                     <div className="flex items-center justify-between text-xs sm:text-sm text-neutral-300 border-b border-white/10 pb-3">
-                      <span>{selectedRoom?.title} ({toPersianDigits(totalNights)} شب اقامت)</span>
+                      <span>
+                        {bookingCategory === 'suite'
+                          ? `${selectedRoom?.title} (${toPersianDigits(totalNights)} شب اقامت)`
+                          : `${selectedExperience?.title} (${selectedExperience?.priceUnit === 'هر نفر' ? `${toPersianDigits(guestCount)} نفر` : 'رزرو اختصاصی'})`
+                        }
+                      </span>
                       <span className="font-bold text-white">{formatPersianPrice(roomCostTotal)}</span>
                     </div>
 
@@ -932,90 +1141,130 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                     </div>
                   </div>
 
-                  {/* شبیه‌ساز پرداخت شتاب */}
-                  <div className="bg-black/60 border border-amber-400/50 rounded-3xl p-6 shadow-2xl space-y-4 backdrop-blur-xl">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                      <div className="flex items-center gap-2">
-                        <Lock className="w-4 h-4 text-emerald-400" />
-                        <span className="text-xs font-bold text-white">درگاه شبیه‌ساز پرداخت شتاب (Sandbox)</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleAutoFillTestCard}
-                        className="text-xs px-3 py-1.5 rounded-xl bg-amber-400/20 text-amber-300 border border-amber-400/40 hover:bg-amber-400/30 transition-all font-bold cursor-pointer"
-                      >
-                        تکمیل خودکار کارت تستی VIP
-                      </button>
-                    </div>
-
-                    <div className="space-y-3.5">
-                      <CustomInput
-                        label="شماره کارت ۱۶ رقمی شتاب (تستی):"
-                        value={cardNumber}
-                        onChange={(e) => setCardNumber(e.target.value)}
-                        placeholder="۶۰۳۷ - ۹۹۷۵ - ۸۸۲۲ - ۴۴۱۱"
-                        startIcon={<CreditCard className="w-4 h-4" />}
-                      />
-
-                      <div className="grid grid-cols-2 gap-3.5">
-                        <CustomInput
-                          label="کد امنیتی CVV2:"
-                          value={cardCvv}
-                          onChange={(e) => setCardCvv(e.target.value)}
-                          placeholder="۷۸۲"
-                          startIcon={<KeyRound className="w-4 h-4" />}
-                        />
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <CustomInput
-                            label="ماه انقضا:"
-                            value={cardExpMonth}
-                            onChange={(e) => setCardExpMonth(e.target.value)}
-                            placeholder="۰۸"
-                          />
-                          <CustomInput
-                            label="سال انقضا:"
-                            value={cardExpYear}
-                            onChange={(e) => setCardExpYear(e.target.value)}
-                            placeholder="۰۸"
-                          />
+                  {/* انتخاب درگاه پرداخت رسمی شاپرک (بانک ملت، سامان، سداد، زرین‌پال) */}
+                  <div className="bg-black/60 border border-amber-400/50 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6 backdrop-blur-xl relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-10 h-10 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400">
+                          <Lock className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <span className="text-sm font-bold text-white block">انتخاب درگاه پرداخت الکترونیک شاپرک</span>
+                          <span className="text-[11px] text-neutral-400">انتقال امن به صفحه رسمی درگاه بانکی با نظارت بانک مرکزی</span>
                         </div>
                       </div>
 
-                      {/* رمز پویا */}
-                      <div className="flex items-end gap-2.5">
-                        <div className="flex-1">
-                          <CustomInput
-                            label="رمز دوم پویا:"
-                            value={cardOtp}
-                            onChange={(e) => setCardOtp(e.target.value)}
-                            placeholder="۵ رقمی..."
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleRequestOtp}
-                          className="h-11 sm:h-12 px-3.5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold cursor-pointer transition-colors whitespace-nowrap"
-                        >
-                          {otpSent ? 'ارسال شد (۵۲۹۱۴)' : 'دریافت رمز پویای تستی'}
-                        </button>
+                      <div className="flex items-center gap-2 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-xl w-fit">
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>پروتکل امن SSL ۲۵۶ بیتی</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs text-neutral-400 bg-neutral-950/70 p-3 rounded-2xl border border-neutral-800">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>تست شبیه‌ساز: بلافاصله پس از کلیک، واچر رسمی با کلید هوشمند صادر می‌گردد.</span>
+                    {/* لیست درگاه‌های بانکی معتبر */}
+                    <div className="space-y-3">
+                      <span className="text-xs text-neutral-300 font-semibold block">
+                        درگاه پرداخت معتبر مورد نظر خود را انتخاب نمایید:
+                      </span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                          {
+                            id: 'mellat',
+                            name: 'به‌پرداخت ملت',
+                            desc: 'شبکه پرداخت رسمی بانک ملت',
+                            badge: 'پایدار و پرسرعت',
+                            color: 'border-rose-500/40 text-rose-400',
+                          },
+                          {
+                            id: 'saman',
+                            name: 'پرداخت الکترونیک سامان (سپ)',
+                            desc: 'درگاه ویژه کارت‌های شتاب بانک سامان',
+                            badge: 'اتصال مستقیم',
+                            color: 'border-cyan-500/40 text-cyan-400',
+                          },
+                          {
+                            id: 'sadad',
+                            name: 'سداد (بانک ملی ایران)',
+                            desc: 'سامانه الکترونیکی پرداخت داده‌ها',
+                            badge: 'امنیت شاپرک',
+                            color: 'border-amber-500/40 text-amber-400',
+                          },
+                          {
+                            id: 'zarinpal',
+                            name: 'زرین‌پال VIP',
+                            desc: 'درگاه پرداخت تاییدشده با تسویه آنی',
+                            badge: 'پشتیبانی ۲۴ ساعته',
+                            color: 'border-emerald-500/40 text-emerald-400',
+                          },
+                        ].map((gw) => {
+                          const isSelected = selectedGateway === gw.id;
+                          return (
+                            <div
+                              key={gw.id}
+                              onClick={() => setSelectedGateway(gw.id as any)}
+                              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                                isSelected
+                                  ? 'bg-amber-400/15 border-amber-400 ring-2 ring-amber-400/40 shadow-xl'
+                                  : 'bg-neutral-950/60 border-neutral-800 hover:border-neutral-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                                  isSelected ? 'border-amber-400 bg-amber-400 text-neutral-950' : 'border-neutral-600'
+                                }`}>
+                                  {isSelected && <div className="w-2 h-2 rounded-full bg-neutral-950" />}
+                                </div>
+
+                                <div>
+                                  <span className="text-xs font-bold text-white block">{gw.name}</span>
+                                  <span className="text-[10px] text-neutral-400 block mt-0.5">{gw.desc}</span>
+                                </div>
+                              </div>
+
+                              <span className={`text-[10px] px-2 py-0.5 rounded-lg border font-mono ${gw.color}`}>
+                                {gw.badge}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
 
+                    {/* توضیحات اعتمادسازی و شفافیت شاپرک */}
+                    <div className="p-4 rounded-2xl bg-neutral-950/70 border border-neutral-800/80 text-xs text-neutral-300 space-y-2 leading-relaxed">
+                      <div className="flex items-center gap-2 text-amber-300 font-bold">
+                        <Lock className="w-4 h-4" />
+                        <span>انتقال مستقیم به سامانه الکترونیکی پرداخت کارت (شاپرک)</span>
+                      </div>
+                      <p className="text-[11px] text-neutral-400">
+                        با کلیک بر روی دکمه زیر، مستقیماً به درگاه پرداخت رسمی بانک هدایت خواهید شد. هیچ‌گونه اطلاعات کارت یا رمز دوم در این وب‌سایت وارد یا ذخیره نمی‌گردد و پس از اتمام پرداخت، به صورت خودکار به همین صفحه بازگردانده شده و واچر رسمی اقامتگاه با شماره پیگیری یکتا صادر می‌گردد.
+                      </p>
+                    </div>
+
+                    {/* دکمه انتقال به درگاه پرداخت */}
                     <CustomButton
                       fullWidth
                       size="lg"
                       variant="primary"
                       isLoading={isProcessingPayment}
                       onClick={handleExecutePayment}
+                      className="shadow-[0_0_30px_rgba(251,191,36,0.4)]"
                     >
-                      تأیید نهایی و صدور واچر رسمی اقامتگاه
+                      <span>انتقال به درگاه پرداخت اینترنتی شاپرک</span>
                     </CustomButton>
+
+                    {/* وضعیت ریدایرکت شبیه‌سازی‌شده */}
+                    {isRedirectingToBank && (
+                      <div className="absolute inset-0 bg-neutral-950/95 backdrop-blur-xl z-30 flex flex-col items-center justify-center p-6 text-center space-y-4 animate-in fade-in">
+                        <div className="w-16 h-16 rounded-full border-4 border-amber-400 border-t-transparent animate-spin flex items-center justify-center" />
+                        <div className="space-y-1">
+                          <h4 className="text-base font-bold text-white">در حال انتقال امن به درگاه شاپرک...</h4>
+                          <p className="text-xs text-neutral-400">
+                            در حال ایجاد نشست امن و احراز فاکتور رسمی اقامتگاه قصر لورا
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between pt-2">
@@ -1085,8 +1334,12 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                           <span className="text-white font-bold text-sm sm:text-base">{guestName || 'میهمان عالی‌رتبه قصر'}</span>
                         </div>
                         <div>
-                          <span className="text-neutral-500 block text-xs">اقامتگاه انتخابی:</span>
-                          <span className="text-amber-300 font-bold">{selectedRoom?.title}</span>
+                          <span className="text-neutral-500 block text-xs">
+                            {bookingCategory === 'suite' ? 'اقامتگاه انتخابی:' : 'تجربه انتخابی:'}
+                          </span>
+                          <span className="text-amber-300 font-bold">
+                            {bookingCategory === 'suite' ? selectedRoom?.title : selectedExperience?.title}
+                          </span>
                         </div>
                         <div>
                           <span className="text-neutral-500 block text-xs">تعداد میهمانان:</span>
@@ -1158,21 +1411,27 @@ export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToEx
                 <span className="text-neutral-400 font-normal">{toPersianDigits(totalNights)} شب</span>
               </h3>
 
-              {/* تصویر و عنوان سوئیت */}
+              {/* تصویر و عنوان سوئیت یا تجربه */}
               <div className="flex items-center gap-3">
                 <img
-                  src={selectedRoom?.imageUrl}
-                  alt={selectedRoom?.title}
+                  src={bookingCategory === 'suite' ? selectedRoom?.imageUrl : selectedExperience?.coverImageUrl}
+                  alt={bookingCategory === 'suite' ? selectedRoom?.title : selectedExperience?.title}
                   referrerPolicy="no-referrer"
                   className="w-16 h-16 rounded-2xl object-cover border border-white/10 shrink-0"
                 />
                 <div>
-                  <h4 className="text-xs font-bold text-white line-clamp-1">{autoPersianText(selectedRoom?.title)}</h4>
+                  <h4 className="text-xs font-bold text-white line-clamp-1">
+                    {autoPersianText(bookingCategory === 'suite' ? selectedRoom?.title : selectedExperience?.title)}
+                  </h4>
                   <div className="text-[11px] text-amber-300 font-semibold mt-0.5">
-                    {formatPersianPrice(selectedRoom?.pricePerNight || 0)} / شب
+                    {bookingCategory === 'suite'
+                      ? `${formatPersianPrice(selectedRoom?.pricePerNight || 0)} / شب`
+                      : `${formatPersianPrice(selectedExperience?.price || 0)} (${selectedExperience?.priceUnit})`}
                   </div>
                   <div className="text-[10px] text-neutral-400 mt-0.5">
-                    ظرفیت: {toPersianDigits(selectedRoom?.capacity)} میهمان
+                    {bookingCategory === 'suite'
+                      ? `ظرفیت: ${toPersianDigits(selectedRoom?.capacity)} میهمان`
+                      : `طبقه: ${selectedExperience?.floorCode || 'G'}`}
                   </div>
                 </div>
               </div>

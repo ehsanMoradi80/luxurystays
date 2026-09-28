@@ -2,10 +2,8 @@
  * SpaceInfoOverlay.tsx
  * 
  * لایه Z-Index 30: هیروسکشن کاملاً تمیز، مینیمال و متمرکز بر عنوان سکانس
- * بر اساس درخواست:
- * - دکمه‌های بعدی و قبلی به طور کامل حذف شدند.
- * - تعامل به طور خالص بر اساس اسکرول فیزیکی (اسکرول به بالا = دنده عقب، اسکرول به پایین = سکانس بعد) هدایت می‌شود.
- * - دکمه رزرو اقامت برای دسترسی کانسیرژ حفظ شده است.
+ * - عنوان و زیرعنوان سینمایی فضا
+ * - دکمه اصلی رزرو اقامتگاه تشریفاتی
  */
 
 import React from 'react';
@@ -21,6 +19,7 @@ interface SpaceInfoOverlayProps {
   onOpenBooking: () => void;
   currentIndex: number;
   totalScenes: number;
+  onSelectScene?: (targetNodeId: string) => void;
 }
 
 export const SpaceInfoOverlay: React.FC<SpaceInfoOverlayProps> = ({
@@ -29,7 +28,7 @@ export const SpaceInfoOverlay: React.FC<SpaceInfoOverlayProps> = ({
   onOpenBooking,
 }) => {
   return (
-    <div id="space-info-overlay" className="absolute inset-0 pointer-events-none z-30 flex flex-col justify-end p-8 sm:p-14 md:p-16">
+    <div id="space-info-overlay" className="absolute inset-0 pointer-events-none z-30 flex flex-col justify-end p-6 sm:p-12 md:p-14">
       <AnimatePresence mode="wait">
         {!isTransitioning && (
           <motion.div
@@ -38,30 +37,32 @@ export const SpaceInfoOverlay: React.FC<SpaceInfoOverlayProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15, transition: { duration: 0.25 } }}
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-2xl pointer-events-auto text-right select-none"
+            className="w-full max-w-2xl pointer-events-auto text-right select-none space-y-4"
           >
             {/* عنوان فضا فقط با فونت وزیرمتن و ارقام فارسی */}
-            <h1 className="text-3xl sm:text-5xl md:text-6xl text-white font-black leading-tight mb-4 drop-shadow-[0_4px_25px_rgba(0,0,0,0.9)] tracking-tight">
-              {autoPersianText(currentNode.title)}
-            </h1>
+            <div>
+              <h1 className="text-3xl sm:text-5xl md:text-6xl text-white font-black leading-tight mb-2 drop-shadow-[0_4px_25px_rgba(0,0,0,0.9)] tracking-tight">
+                {autoPersianText(currentNode.title)}
+              </h1>
 
-            {currentNode.subtitle && (
-              <p className="text-sm sm:text-base text-neutral-300/90 mb-6 font-light max-w-xl">
-                {autoPersianText(currentNode.subtitle)}
-              </p>
-            )}
+              {currentNode.subtitle && (
+                <p className="text-xs sm:text-sm md:text-base text-neutral-300/90 font-light max-w-xl line-clamp-2">
+                  {autoPersianText(currentNode.subtitle)}
+                </p>
+              )}
+            </div>
 
             {/* دکمه رزرو اقامت */}
-            <div className="flex items-center gap-3 sm:gap-4">
+            <div className="pt-1">
               <CustomButton
                 id="btn-open-booking"
                 onClick={onOpenBooking}
-                size="lg"
+                size="md"
                 variant="primary"
                 leftIcon={<Sparkles className="w-4 h-4" />}
                 className="shadow-2xl hover:scale-[1.03]"
               >
-                رزرو اقامتگاه تشریفاتی
+                رزرو این اقامتگاه / تجربه
               </CustomButton>
             </div>
           </motion.div>
@@ -70,4 +71,3 @@ export const SpaceInfoOverlay: React.FC<SpaceInfoOverlayProps> = ({
     </div>
   );
 };
-

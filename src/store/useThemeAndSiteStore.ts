@@ -8,6 +8,13 @@
 
 import { create } from 'zustand';
 import { toPersianDigits, formatToJalali } from '../utils/jalali';
+import { 
+  ExperiencePackage, 
+  DedicatedExperience, 
+  DedicatedSequence, 
+  DedicatedTransition 
+} from '../types/cms';
+export type { ExperiencePackage, DedicatedExperience, DedicatedSequence, DedicatedTransition };
 
 export type SiteThemeId = 'gold' | 'emerald' | 'sapphire' | 'rose';
 export type PanelThemeId = 'obsidian' | 'slate' | 'monochrome';
@@ -63,19 +70,10 @@ export interface BookingRecord {
   createdAt: string;
 }
 
-export interface Tour360Hotspot {
-  id: string;
-  targetNodeId: string;
-  title: string;
-  yaw: number; // 0 to 360 degrees
-  pitch: number; // -85 to 85 degrees
-}
-
-export interface Tour360Node {
-  id: string;
-  title: string;
-  panoramaUrl: string;
-  hotspots?: Tour360Hotspot[];
+export interface SubSequenceOption {
+  id: string; // sequence nodeId e.g. 'suite', 'suite-bedroom', 'suite-terrace'
+  title: string; // 'سالن نشیمن', 'اتاق خواب مستر', 'تراس جکوزی'
+  description?: string;
 }
 
 export interface MapHotspot {
@@ -87,8 +85,8 @@ export interface MapHotspot {
   x: number; // percentage 0 - 100
   y: number; // percentage 0 - 100
   description?: string;
-  has360Tour?: boolean;
-  tour360Nodes?: Tour360Node[];
+  experiencePackageId?: string;
+  subSequences?: SubSequenceOption[];
 }
 
 export interface FloorEnvironment {
@@ -119,6 +117,9 @@ interface ThemeAndSiteState {
   // سایت‌های اقامتگاهی
   sites: Record<string, SiteConfig>;
   
+  // پکیج‌های تجارب و سوئیت‌های هتل
+  packages: ExperiencePackage[];
+
   // اتاق‌ها و موجودی با تقویم جلالی
   rooms: HotelRoom[];
   
@@ -134,6 +135,10 @@ interface ThemeAndSiteState {
 
   // تنظیمات نقشه معماری هتل
   hotelMap: HotelMapConfig;
+
+  // تجارب اختصاصی هتل (مستقل از سکانس‌های صفحه اصلی سایت)
+  dedicatedExperiences: DedicatedExperience[];
+  activeExperienceId: string | null;
   
   // اکشن‌ها
   setSiteTheme: (theme: SiteThemeId) => void;
@@ -141,6 +146,15 @@ interface ThemeAndSiteState {
   setRadius: (radius: RadiusToken) => void;
   setActiveSiteId: (siteId: string) => void;
   setPreSelectedRoomId: (roomId: string | null) => void;
+  setActiveExperienceId: (id: string | null) => void;
+  addDedicatedExperience: (exp: DedicatedExperience) => void;
+  updateDedicatedExperience: (id: string, partial: Partial<DedicatedExperience>) => void;
+  removeDedicatedExperience: (id: string) => void;
+  addSequenceToExperience: (expId: string, seq: DedicatedSequence) => void;
+  updateExperienceSequence: (expId: string, seqId: string, partial: Partial<DedicatedSequence>) => void;
+  removeExperienceSequence: (expId: string, seqId: string) => void;
+  addTransitionToExperience: (expId: string, trans: DedicatedTransition) => void;
+  removeExperienceTransition: (expId: string, transId: string) => void;
   updateSiteConfig: (siteId: string, partial: Partial<SiteConfig>) => void;
   updateRoomAvailability: (roomId: string, date: string, status: 'available' | 'limited' | 'booked') => void;
   updateRoomPrice: (roomId: string, newPrice: number) => void;
@@ -152,6 +166,9 @@ interface ThemeAndSiteState {
   updateFloorHotspot: (floorId: string, hotspotId: string, partial: Partial<MapHotspot>) => void;
   addFloorHotspot: (floorId: string, hotspot: MapHotspot) => void;
   removeFloorHotspot: (floorId: string, hotspotId: string) => void;
+  updatePackage: (id: string, partial: Partial<ExperiencePackage>) => void;
+  addPackage: (pkg: ExperiencePackage) => void;
+  removePackage: (id: string) => void;
   updateHotelMap: (partial: Partial<HotelMapConfig>) => void;
   setMapHotspots: (hotspots: MapHotspot[]) => void;
   updateMapHotspot: (id: string, partial: Partial<MapHotspot>) => void;
@@ -337,251 +354,588 @@ const INITIAL_BOOKINGS: BookingRecord[] = [
   },
 ];
 
+const INITIAL_PACKAGES: ExperiencePackage[] = [
+  {
+    id: 'pkg-suite-penthouse',
+    title: 'سوئیت پنت‌هاوس سلطنتی',
+    type: 'suite',
+    tagline: 'اقامتگاه اختصاصی ۴۲۰ متری بر فراز آسمانه و اقیانوس',
+    floorCode: '۴',
+    price: 48000000,
+    priceUnit: 'هر شب',
+    includedNodeIds: ['suite', 'suite-bedroom', 'suite-terrace'],
+    description: 'پکیج کامل اقامت سلطنتی شامل سالن پذیرایی اشرافی، اتاق خواب رویال مستر و تراس معلق ۲۲۰ متری همراه با جکوزی اختصاصی.',
+    coverImageUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1200&q=80',
+    amenities: ['استخر اینفینیتی اختصاصی بر فراز بام', 'جکوزی روباز رو به افق دریا', 'آسانسور شیشه‌ای مستقیم', 'سرپیشخدمت شخصی ۲۴ ساعته'],
+  },
+  {
+    id: 'pkg-dining-ambrosia',
+    title: 'ضیافت شام در رستوران میشلن آمبروزیا',
+    type: 'standalone_experience',
+    tagline: 'تجربه آشپزی سطح بالای بین‌المللی با منوی سرآشپز برنده ستاره میشلن',
+    floorCode: '۲',
+    price: 3500000,
+    priceUnit: 'هر نفر',
+    includedNodeIds: ['dining', 'dining-deck'],
+    description: 'رزرو میز اختصاصی در سالن اصلی یا عرشه روباز با چشم‌انداز غروب مستقیم خورشید در دریا و نوای زنده ویولن.',
+    coverImageUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80',
+    amenities: ['منوی فصلی سرآشپز میشلن', 'رزرو لژ اختصاصی', 'پذیرایی نوشیدنی خوشامدگویی خاویار'],
+  },
+  {
+    id: 'pkg-infinity-oasis',
+    title: 'واحه ساحلی و کابانای اختصاصی VIP',
+    type: 'standalone_experience',
+    tagline: 'یک روز آرامش مطلق در آلاچیق‌های لوکس صخره‌ای و استخر آب‌شور',
+    floorCode: 'G',
+    price: 6500000,
+    priceUnit: 'هر سانس',
+    includedNodeIds: ['pool', 'pool-cabanas'],
+    description: 'بهره‌مندی از کابانای مجهز با تخت‌های مخملین آفتاب، ماساژ در آب، سرویس حوله گرم و میوه‌های تازه استوایی.',
+    coverImageUrl: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1200&q=80',
+    amenities: ['کابانای اختصاصی روزانه', 'ماساژور خصوصی کنار آب', 'سرو نوشیدنی‌های ارگانیک'],
+  },
+  {
+    id: 'pkg-grand-atrium',
+    title: 'تالار تشریفات و لابی مرمرین',
+    type: 'facility',
+    tagline: 'دیدار در آتریوم باشکوه با نوای پیانوی استین‌وی',
+    floorCode: '۱',
+    price: 0,
+    priceUnit: 'هر شب',
+    includedNodeIds: ['gate', 'lobby'],
+    description: 'فضای عمومی و اختصاصی تشریفات، چای‌بار سلطنتی و دیدار با سرپیشخدمت قصر.',
+    coverImageUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80',
+    amenities: ['پیانوی زنده گرند', 'سرویس چای اصیل', 'تشریفات استقبال لیموزین'],
+  },
+];
+
+const INITIAL_DEDICATED_EXPERIENCES: DedicatedExperience[] = [
+  {
+    id: 'exp-suite-penthouse',
+    title: 'سوئیت سلطنتی پنت‌هاوس ۴۲۰ متری',
+    tagline: 'اقامتگاه اختصاصی بر فراز اقیانوس با دید ۳۶۰ درجه',
+    category: 'suite',
+    floorCode: '۴',
+    coverImageUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1200&q=80',
+    price: 48000000,
+    priceUnit: 'هر شب',
+    amenities: ['استخر اینفینیتی اختصاصی بام', 'جکوزی روباز رو به دریا', 'آسانسور شیشه‌ای مستقیم', 'سرپیشخدمت شخصی ۲۴ ساعته'],
+    description: 'پکیج کامل اقامت سلطنتی در پنت‌هاوس شامل سالن پذیرایی اشرافی، اتاق خواب رویال مستر و تراس معلق ۲۲۰ متری همراه با جکوزی اختصاصی.',
+    sequences: [
+      {
+        id: 'seq-penthouse-living',
+        title: 'سالن پذیرایی پنت‌هاوس و آتریوم شیشه‌ای',
+        subtitle: 'مبلمان دست‌ساز و دید ۳۶۰ درجه به اقیانوس',
+        description: 'سالن اصلی با سقف شیشه‌ای و ارتفاع دوبلکس، بار اختصاصی و پیانوی دیجیتال.',
+        videoUrl: 'https://assets.mixkit.co/videos/42792/42792-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1200&q=80',
+        duration: 11.2,
+      },
+      {
+        id: 'seq-penthouse-bedroom',
+        title: 'اتاق خواب رویال مستر و بالکن اختصاصی',
+        subtitle: 'تخت خواب کینگ‌سایز با ملافه‌های ابریشمین',
+        description: 'فضای آرامش‌بخش با حمام مرمرین بازالت، دید مستقیم به طلوع و غروب خورشید.',
+        videoUrl: 'https://assets.mixkit.co/videos/42791/42791-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1200&q=80',
+        duration: 8.5,
+      },
+      {
+        id: 'seq-penthouse-terrace',
+        title: 'تراس معلق با جکوزی روباز رو به افق دریا',
+        subtitle: 'جکوزی آبگرم مشرف به بی‌کران دریا',
+        description: 'تراس خصوصی ۲۲۰ متری با تخت‌های آفتاب‌گیر و منوی اختصاصی کوکتل بار.',
+        videoUrl: 'https://assets.mixkit.co/videos/42790/42790-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1200&q=80',
+        duration: 9.5,
+      },
+    ],
+    transitions: [
+      {
+        id: 'trans-living-to-bedroom',
+        fromSequenceId: 'seq-penthouse-living',
+        toSequenceId: 'seq-penthouse-bedroom',
+        label: 'گذر از راهروی مرمرین به اتاق خواب مستر',
+        videoUrl: 'https://assets.mixkit.co/videos/42788/42788-720.mp4',
+        duration: 4.8,
+        direction: 'forward',
+      },
+      {
+        id: 'trans-bedroom-to-terrace',
+        fromSequenceId: 'seq-penthouse-bedroom',
+        toSequenceId: 'seq-penthouse-terrace',
+        label: 'گشودن درب‌های شیشه‌ای به تراس و جکوزی معلق',
+        videoUrl: 'https://assets.mixkit.co/videos/42789/42789-720.mp4',
+        duration: 4.5,
+        direction: 'forward',
+      },
+      {
+        id: 'trans-terrace-to-living',
+        fromSequenceId: 'seq-penthouse-terrace',
+        toSequenceId: 'seq-penthouse-living',
+        label: 'بازگشت به سالن پذیرایی اشرافی',
+        videoUrl: 'https://assets.mixkit.co/videos/42788/42788-720.mp4',
+        duration: 4.2,
+        direction: 'backward',
+      },
+    ],
+  },
+  {
+    id: 'exp-michelin-dining',
+    title: 'ضیافت شام در رستوران میشلن آمبروزیا',
+    tagline: 'تجربه آشپزی سطح بالای بین‌المللی با منوی سرآشپز میشلن',
+    category: 'dining',
+    floorCode: '۲',
+    coverImageUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80',
+    price: 3500000,
+    priceUnit: 'هر نفر',
+    amenities: ['منوی فصلی سرآشپز میشلن', 'رزرو لژ اختصاصی', 'پذیرایی خوشامدگویی خاویار'],
+    description: 'رزرو میز اختصاصی در سالن اصلی یا عرشه روباز با چشم‌انداز غروب مستقیم خورشید در دریا و نوای زنده ویولن.',
+    sequences: [
+      {
+        id: 'seq-dining-main',
+        title: 'سالن اصلی رستوران با چلچراغ‌های مورانو',
+        subtitle: 'لژهای مخملین با معماری رنسانس',
+        description: 'سالن ضیافت مجلل با نوای زنده پیانو و ویولن، و سرو غذاهای منتخب بین‌المللی.',
+        videoUrl: 'https://assets.mixkit.co/videos/42789/42789-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80',
+        duration: 7.5,
+      },
+      {
+        id: 'seq-dining-deck',
+        title: 'عرشه روباز دریا و بار کوکتل غروب',
+        subtitle: 'شام رمانتیک زیر سقف آسمان شب',
+        description: 'میزهای روباز بر فراز صخره‌های ساحلی با تماشای غروب خورشید در آب‌های نیلگون.',
+        videoUrl: 'https://assets.mixkit.co/videos/42794/42794-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80',
+        duration: 8.2,
+      },
+    ],
+    transitions: [
+      {
+        id: 'trans-dining-main-to-deck',
+        fromSequenceId: 'seq-dining-main',
+        toSequenceId: 'seq-dining-deck',
+        label: 'گذر به عرشه روباز و بالکن ساحلی',
+        videoUrl: 'https://assets.mixkit.co/videos/42788/42788-720.mp4',
+        duration: 4.5,
+        direction: 'forward',
+      },
+      {
+        id: 'trans-dining-deck-to-main',
+        fromSequenceId: 'seq-dining-deck',
+        toSequenceId: 'seq-dining-main',
+        label: 'بازگشت به لژ مرکزی رستوران',
+        videoUrl: 'https://assets.mixkit.co/videos/42789/42789-720.mp4',
+        duration: 4.2,
+        direction: 'backward',
+      },
+    ],
+  },
+  {
+    id: 'exp-thalasso-spa',
+    title: 'پکیج رویال اسپا، تالاسوتراپی و حمام ترکی',
+    tagline: 'تجربه آرامش مطلق با ماسک طلای ۲۴ عیار و روغن‌های ارگانیک',
+    category: 'spa',
+    floorCode: '۱',
+    coverImageUrl: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1200&q=80',
+    price: 4800000,
+    priceUnit: 'هر سانس',
+    amenities: ['ماساژ دونفره اختصاصی', 'حمام ترکی با سنگ بازالت داغ', 'حوضچه آب‌نمک کوهستان'],
+    description: 'پناهگاهی از رایحه اکالیپتوس، اسطوخودوس و آب‌های معدنی شفابخش در صخره‌های هتل.',
+    sequences: [
+      {
+        id: 'seq-spa-lounge',
+        title: 'سالن ریلکسیشن و چای‌بار ارگانیک گیاهی',
+        subtitle: 'آرامش مقدماتی با نوای فرکانس ۴۳۲ هرتز',
+        description: 'تخت‌های مخملین استراحت با سرو دمنوش‌های دست‌چین و حوله‌های گرم معطر.',
+        videoUrl: 'https://assets.mixkit.co/videos/42791/42791-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1200&q=80',
+        duration: 8.0,
+      },
+      {
+        id: 'seq-spa-pools',
+        title: 'حوضچه‌های آبگرم معدنی و سونای نمک هیمالیا',
+        subtitle: 'آب‌درمانی با املاح غنی معدنی و ماساژ طلا',
+        description: 'حوضچه‌های آرامش‌بخش سنگی با دمای کنترل‌شده و جریان ملایم آبشار گرم.',
+        videoUrl: 'https://assets.mixkit.co/videos/42794/42794-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1200&q=80',
+        duration: 9.0,
+      },
+    ],
+    transitions: [
+      {
+        id: 'trans-spa-lounge-to-pools',
+        fromSequenceId: 'seq-spa-lounge',
+        toSequenceId: 'seq-spa-pools',
+        label: 'ورود به دالان آب‌درمانی و حوضچه‌های نمک',
+        videoUrl: 'https://assets.mixkit.co/videos/42788/42788-720.mp4',
+        duration: 4.5,
+        direction: 'forward',
+      },
+      {
+        id: 'trans-spa-pools-to-lounge',
+        fromSequenceId: 'seq-spa-pools',
+        toSequenceId: 'seq-spa-lounge',
+        label: 'بازگشت به سالن چای‌بار و آرامش',
+        videoUrl: 'https://assets.mixkit.co/videos/42789/42789-720.mp4',
+        duration: 4.0,
+        direction: 'backward',
+      },
+    ],
+  },
+  {
+    id: 'exp-beach-cabanas',
+    title: 'واحه ساحلی و کابانای اختصاصی VIP',
+    tagline: 'یک روز آرامش مطلق در آلاچیق‌های صخره‌ای و استخر آب‌شور',
+    category: 'club',
+    floorCode: 'G',
+    coverImageUrl: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1200&q=80',
+    price: 6500000,
+    priceUnit: 'هر سانس',
+    amenities: ['کابانای مجهز VIP', 'ماساژور کنار آب', 'سرویس حوله گرم و میوه استوایی'],
+    description: 'بهره‌مندی از کابانای مجهز با تخت‌های مخملین آفتاب، ماساژ در آب، سرویس حوله گرم و میوه‌های تازه استوایی.',
+    sequences: [
+      {
+        id: 'seq-beach-pool',
+        title: 'استخر اینفینیتی ساحلی رو به بی‌کران دریا',
+        subtitle: 'شنا در آب گرم فیلترشده با املاح دریا',
+        description: 'استخر معلق صخره‌ای با لبه‌های نامرئی پیوند خورده با افق خلیج.',
+        videoUrl: 'https://assets.mixkit.co/videos/42794/42794-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1200&q=80',
+        duration: 8.5,
+      },
+      {
+        id: 'seq-beach-cabana-lounge',
+        title: 'کاباناهای VIP با تخت‌های حریر و بار ساحلی',
+        subtitle: 'حریم خصوصی لوکس در ساحل شنی اختصاصی',
+        description: 'کابانای چوبی مجهز به سیستم تهویه مطبوع، حمام اختصاصی و پیشخدمت ساحلی.',
+        videoUrl: 'https://assets.mixkit.co/videos/42790/42790-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1200&q=80',
+        duration: 9.0,
+      },
+    ],
+    transitions: [
+      {
+        id: 'trans-pool-to-cabana',
+        fromSequenceId: 'seq-beach-pool',
+        toSequenceId: 'seq-beach-cabana-lounge',
+        label: 'گذر از گذرگاه چوبی نخلستان به کابانای VIP',
+        videoUrl: 'https://assets.mixkit.co/videos/42792/42792-720.mp4',
+        duration: 4.8,
+        direction: 'forward',
+      },
+      {
+        id: 'trans-cabana-to-pool',
+        fromSequenceId: 'seq-beach-cabana-lounge',
+        toSequenceId: 'seq-beach-pool',
+        label: 'بازگشت به لبه استخر اینفینیتی',
+        videoUrl: 'https://assets.mixkit.co/videos/42788/42788-720.mp4',
+        duration: 4.5,
+        direction: 'backward',
+      },
+    ],
+  },
+  {
+    id: 'exp-cafe-lounge',
+    title: 'کافه روف‌تاپ و لانژ شیشه‌ای غروب',
+    tagline: 'دید ۳۶۰ درجه به افق دریا با منوی قهوه‌های تخصصی و عصرانه فرانسوی',
+    category: 'cafe',
+    floorCode: '۴',
+    coverImageUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=1200&q=80',
+    price: 950000,
+    priceUnit: 'هر نفر',
+    amenities: ['منوی باریستای بین‌المللی', 'تراس شیشه‌ای معلق', 'پیانو و موسیقی زنده جز'],
+    description: 'کافه روف‌تاپ با دکوراسیون اسکاندیناوی و سقف تمام‌شیشه‌ای رو به دریای بی‌کران.',
+    sequences: [
+      {
+        id: 'seq-cafe-bar',
+        title: 'سالن اصلی کافه و بار قهوه تخصصی',
+        subtitle: 'رایحه قهوه‌های اصیل کلمبیا و شیرینی‌های تازه',
+        description: 'بار مرمرین با طراحی مدرن و چشم‌انداز افق ساحلی.',
+        videoUrl: 'https://assets.mixkit.co/videos/42789/42789-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=1200&q=80',
+        duration: 8.0,
+      },
+      {
+        id: 'seq-cafe-terrace',
+        title: 'عرشه روباز روف‌تاپ و تماشای غروب',
+        subtitle: 'مبلمان راحتی مخملین زیر سقف آسمان',
+        description: 'تراس روباز مرتفع‌ترین نقطه قصر مشرف به خورشید در حال غروب.',
+        videoUrl: 'https://assets.mixkit.co/videos/42790/42790-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80',
+        duration: 9.0,
+      },
+    ],
+    transitions: [
+      {
+        id: 'trans-bar-to-terrace',
+        fromSequenceId: 'seq-cafe-bar',
+        toSequenceId: 'seq-cafe-terrace',
+        label: 'ورود به تراس روباز روف‌تاپ',
+        videoUrl: 'https://assets.mixkit.co/videos/42788/42788-720.mp4',
+        duration: 4.2,
+        direction: 'forward',
+      },
+      {
+        id: 'trans-terrace-to-bar',
+        fromSequenceId: 'seq-cafe-terrace',
+        toSequenceId: 'seq-cafe-bar',
+        label: 'بازگشت به بار کافه',
+        videoUrl: 'https://assets.mixkit.co/videos/42789/42789-720.mp4',
+        duration: 4.0,
+        direction: 'backward',
+      },
+    ],
+  },
+  {
+    id: 'exp-game-room',
+    title: 'کلاب تفریحی و گیم‌روم اختصاصی VIP',
+    tagline: 'سالن بیلیارد سلطنتی، شبیه‌سازهای حرفه‌ای و استودیوی کنسول‌های مدرن',
+    category: 'gameroom',
+    floorCode: '۲',
+    coverImageUrl: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80',
+    price: 1800000,
+    priceUnit: 'هر سانس',
+    amenities: ['میز بیلیارد اسنوکر استاندارد جهانی', 'شبیه‌ساز مسابقات فرمول یک', 'کنسول‌های نسل نهم با مانیتورهای اولد'],
+    description: 'فضایی هیجان‌انگیز و کاملاً آکوستیک با نورپردازی نئون و پذیرایی اختصاصی نوشیدنی.',
+    sequences: [
+      {
+        id: 'seq-gameroom-billiard',
+        title: 'سالن اصلی بیلیارد و لژ استراحت',
+        subtitle: 'میزهای چوب گردوی ماهوگانی و لوسترهای برنجی',
+        description: 'میز اسنوکر سفارشی و مبلمان چرم چسترفیلد برای مسابقات دوستانه.',
+        videoUrl: 'https://assets.mixkit.co/videos/42792/42792-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80',
+        duration: 8.5,
+      },
+      {
+        id: 'seq-gameroom-arcade',
+        title: 'بخش شبیه‌سازها و کنسول‌های اختصاصی',
+        subtitle: 'شبیه‌ساز مسابقه‌ای با سیستم لرزش و هدست‌های واقعیت مجازی',
+        description: 'اتاق گیمینگ مدرن با بالاترین استانداردهای صوتی و تصویری.',
+        videoUrl: 'https://assets.mixkit.co/videos/42794/42794-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80',
+        duration: 9.0,
+      },
+    ],
+    transitions: [
+      {
+        id: 'trans-billiard-to-arcade',
+        fromSequenceId: 'seq-gameroom-billiard',
+        toSequenceId: 'seq-gameroom-arcade',
+        label: 'ورود به بخش گیمینگ و واقعیت مجازی',
+        videoUrl: 'https://assets.mixkit.co/videos/42788/42788-720.mp4',
+        duration: 4.0,
+        direction: 'forward',
+      },
+      {
+        id: 'trans-arcade-to-billiard',
+        fromSequenceId: 'seq-gameroom-arcade',
+        toSequenceId: 'seq-gameroom-billiard',
+        label: 'بازگشت به سالن بیلیارد',
+        videoUrl: 'https://assets.mixkit.co/videos/42789/42789-720.mp4',
+        duration: 4.0,
+        direction: 'backward',
+      },
+    ],
+  },
+  {
+    id: 'exp-deluxe-room',
+    title: 'اتاق رویال دلوکس کینگ با چشم‌انداز اقیانوس',
+    tagline: 'اقامتگاه اشرافی ۷۵ متری با بالکن شیشه‌ای رو به طلوع آفتاب',
+    category: 'room',
+    floorCode: '۳',
+    coverImageUrl: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1200&q=80',
+    price: 18500000,
+    priceUnit: 'هر شب',
+    amenities: ['تخت کینگ‌سایز با تشک طبی کتان', 'بالکن اختصاصی دید دریا', 'حمام تمام‌مرمرین با وان مستقل'],
+    description: 'اتاق دلوکس طراحی‌شده با رنگ‌های گرم مدیترانه‌ای و سیستم خانه هوشمند.',
+    sequences: [
+      {
+        id: 'seq-room-master',
+        title: 'فضای اصلی اتاق خواب و نشیمن اختصاصی',
+        subtitle: 'نور طبیعی اقیانوس با پرده‌های هوشمند حریر',
+        description: 'فضای استراحت لوکس با میز کار ماهوگانی و سرویس چای ژاپنی.',
+        videoUrl: 'https://assets.mixkit.co/videos/42791/42791-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1200&q=80',
+        duration: 8.5,
+      },
+      {
+        id: 'seq-room-balcony',
+        title: 'تراس خصوصی با چشم‌انداز مستقیم ساحل',
+        subtitle: 'صندلی‌های راحتی حصیری برای تماشای امواج',
+        description: 'بالکن دنج رو به آب‌های لاجوردی خلیج برای صرف صبحانه.',
+        videoUrl: 'https://assets.mixkit.co/videos/42790/42790-720.mp4',
+        posterUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1200&q=80',
+        duration: 8.0,
+      },
+    ],
+    transitions: [
+      {
+        id: 'trans-room-to-balcony',
+        fromSequenceId: 'seq-room-master',
+        toSequenceId: 'seq-room-balcony',
+        label: 'گشودن درب شیشه‌ای به تراس اقیانوس',
+        videoUrl: 'https://assets.mixkit.co/videos/42788/42788-720.mp4',
+        duration: 4.2,
+        direction: 'forward',
+      },
+      {
+        id: 'trans-balcony-to-room',
+        fromSequenceId: 'seq-room-balcony',
+        toSequenceId: 'seq-room-master',
+        label: 'بازگشت به اتاق مستر',
+        videoUrl: 'https://assets.mixkit.co/videos/42789/42789-720.mp4',
+        duration: 4.0,
+        direction: 'backward',
+      },
+    ],
+  },
+];
+
 const INITIAL_FLOORS: FloorEnvironment[] = [
   {
     id: 'fl-4',
     code: '۴',
-    name: 'طبقه ۴ - سوئیت پنت‌هاوس',
+    name: 'طبقه ۴ - پنت‌هاوس سلطنتی و کافه روف‌تاپ',
     mediaType: 'image',
     mediaUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=2400&q=85',
     hotspots: [
       {
         id: 'hs-suite',
         nodeId: 'suite',
-        title: 'سوئیت پنت‌هاوس سلطنتی',
+        title: 'سوئیت سلطنتی پنت‌هاوس',
         level: 'طبقه ۴',
         wing: 'برج آسمانه سلطنتی',
-        x: 50,
+        x: 42,
         y: 45,
-        description: 'اقامتگاه اختصاصی ۳۸۰ متری با دید ۳۶۰ درجه به اقیانوس',
-        has360Tour: true,
-        tour360Nodes: [
-          {
-            id: 'suite-living',
-            title: 'سالن نشیمن و تالار پذیرایی',
-            panoramaUrl: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=3000&q=85',
-            hotspots: [
-              {
-                id: 'spot-to-bed',
-                targetNodeId: 'suite-bedroom',
-                title: 'ورود به اتاق خواب رویال مستر',
-                yaw: 65,
-                pitch: -5,
-              },
-              {
-                id: 'spot-to-terrace',
-                targetNodeId: 'suite-terrace',
-                title: 'خروج به تراس اختصاصی رو به دریا',
-                yaw: 220,
-                pitch: 0,
-              },
-            ],
-          },
-          {
-            id: 'suite-bedroom',
-            title: 'اتاق خواب رویال مستر',
-            panoramaUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=3000&q=85',
-            hotspots: [
-              {
-                id: 'spot-back-living',
-                targetNodeId: 'suite-living',
-                title: 'بازگشت به سالن نشیمن',
-                yaw: 180,
-                pitch: -5,
-              },
-              {
-                id: 'spot-bed-terrace',
-                targetNodeId: 'suite-terrace',
-                title: 'دید به تراس و اقیانوس',
-                yaw: 310,
-                pitch: 0,
-              },
-            ],
-          },
-          {
-            id: 'suite-terrace',
-            title: 'تراس اختصاصی دید به دریا و آسمانه',
-            panoramaUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=3000&q=85',
-            hotspots: [
-              {
-                id: 'spot-back-to-suite',
-                targetNodeId: 'suite-living',
-                title: 'ورود به داخل سوئیت',
-                yaw: 90,
-                pitch: -5,
-              },
-            ],
-          },
-        ],
+        description: 'اقامتگاه اختصاصی ۴۲۰ متری با دید ۳۶۰ درجه به اقیانوس',
+        experiencePackageId: 'exp-suite-penthouse',
+      },
+      {
+        id: 'hs-cafe',
+        nodeId: 'cafe',
+        title: 'کافه روف‌تاپ و لانژ غروب',
+        level: 'طبقه ۴',
+        wing: 'عرشه شیشه‌ای شرقی',
+        x: 68,
+        y: 50,
+        description: 'قهوه‌های تخصصی با چشم‌انداز افق دریا',
+        experiencePackageId: 'exp-cafe-lounge',
+      },
+    ],
+  },
+  {
+    id: 'fl-3',
+    code: '۳',
+    name: 'طبقه ۳ - اتاق‌های رویال دلوکس',
+    mediaType: 'image',
+    mediaUrl: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=2400&q=85',
+    hotspots: [
+      {
+        id: 'hs-room-deluxe',
+        nodeId: 'room',
+        title: 'اتاق رویال دلوکس کینگ',
+        level: 'طبقه ۳',
+        wing: 'بال شرقی ساحلی',
+        x: 50,
+        y: 48,
+        description: 'اقامتگاه اشرافی ۷۵ متری با بالکن شیشه‌ای رو به دریا',
+        experiencePackageId: 'exp-deluxe-room',
       },
     ],
   },
   {
     id: 'fl-2',
     code: '۲',
-    name: 'طبقه ۲ - رستوران و تراس غروب',
+    name: 'طبقه ۲ - رستوران میشلن و گیم‌روم VIP',
     mediaType: 'image',
     mediaUrl: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=2400&q=85',
     hotspots: [
       {
         id: 'hs-dining',
         nodeId: 'dining',
-        title: 'رستوران آمبروزیا',
+        title: 'رستوران میشلن آمبروزیا',
         level: 'طبقه ۲',
-        wing: 'تراس شرقی اقیانوس',
-        x: 50,
-        y: 50,
-        description: 'میزهای روباز مشرف به غروب با منوی سرآشپز بین‌المللی',
-        has360Tour: true,
-        tour360Nodes: [
-          {
-            id: 'dining-main',
-            title: 'سالن غذاخوری مجلل سرآشپز',
-            panoramaUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=3000&q=85',
-            hotspots: [
-              {
-                id: 'spot-to-terrace-dining',
-                targetNodeId: 'dining-deck',
-                title: 'عرشه روباز مشرف به غروب',
-                yaw: 145,
-                pitch: -3,
-              },
-            ],
-          },
-          {
-            id: 'dining-deck',
-            title: 'عرشه روباز ساحلی و تراس غروب',
-            panoramaUrl: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=3000&q=85',
-            hotspots: [
-              {
-                id: 'spot-back-to-dining',
-                targetNodeId: 'dining-main',
-                title: 'ورود به سالن اصلی رستوران',
-                yaw: 320,
-                pitch: -5,
-              },
-            ],
-          },
-        ],
+        wing: 'عرشه روباز اقیانوس',
+        x: 38,
+        y: 45,
+        description: 'شام رمانتیک با منوی ستاره‌دار سرآشپز',
+        experiencePackageId: 'exp-michelin-dining',
+      },
+      {
+        id: 'hs-gameroom',
+        nodeId: 'gameroom',
+        title: 'گیم‌روم و کلاب تفریحی VIP',
+        level: 'طبقه ۲',
+        wing: 'سالن سرگرمی غربی',
+        x: 68,
+        y: 55,
+        description: 'سالن بیلیارد، شبیه‌ساز مسابقه و کنسول‌های نسل جدید',
+        experiencePackageId: 'exp-game-room',
       },
     ],
   },
   {
     id: 'fl-1',
     code: '۱',
-    name: 'طبقه ۱ - تالار و لابی مرمرین',
+    name: 'طبقه ۱ - لابی مرمرین و رویال اسپا',
     mediaType: 'image',
     mediaUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=2400&q=85',
     hotspots: [
       {
         id: 'hs-lobby',
         nodeId: 'lobby',
-        title: 'تالار و لابی مرمرین',
+        title: 'تالار تشریفات و لابی مرمرین',
         level: 'طبقه ۱',
         wing: 'آتریوم مرکزی',
-        x: 50,
-        y: 50,
-        description: 'آتریوم شیشه‌ای با نوای پیانو و سنگ‌های مرمر کرارا',
-        has360Tour: true,
-        tour360Nodes: [
-          {
-            id: 'lobby-atrium',
-            title: 'آتریوم مرکزی و پیانوی گرند',
-            panoramaUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=3000&q=85',
-            hotspots: [
-              {
-                id: 'spot-lobby-lounge',
-                targetNodeId: 'lobby-vip',
-                title: 'لانژ اختصاصی تشریفات',
-                yaw: 80,
-                pitch: 0,
-              },
-            ],
-          },
-          {
-            id: 'lobby-vip',
-            title: 'لانژ اختصاصی تشریفات و گالری',
-            panoramaUrl: 'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=3000&q=85',
-            hotspots: [
-              {
-                id: 'spot-back-atrium',
-                targetNodeId: 'lobby-atrium',
-                title: 'بازگشت به آتریوم مرکزی',
-                yaw: 260,
-                pitch: -4,
-              },
-            ],
-          },
-        ],
+        x: 42,
+        y: 55,
+        description: 'آتریوم باشکوه با نوای پیانوی زنده',
+        experiencePackageId: 'pkg-grand-atrium',
+      },
+      {
+        id: 'hs-spa',
+        nodeId: 'pool',
+        title: 'رویال اسپا و حمام ترکی',
+        level: 'طبقه ۱',
+        wing: 'دالان تندرستی صخره‌ای',
+        x: 72,
+        y: 45,
+        description: 'تالاسوتراپی، ماساژ طلا و حوضچه‌های آبگرم',
+        experiencePackageId: 'exp-thalasso-spa',
       },
     ],
   },
   {
     id: 'fl-0',
     code: 'G',
-    name: 'همکف - استخر، واحه ساحلی و درگاه ورودی',
+    name: 'همکف - استخر اینفینیتی و کاباناهای ساحلی',
     mediaType: 'video',
     mediaUrl: 'https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-resort-with-palm-trees-and-swimming-pool-42562-large.mp4',
     hotspots: [
       {
         id: 'hs-pool',
         nodeId: 'pool',
-        title: 'استخر و واحه ساحلی',
+        title: 'استخر اینفینیتی صخره‌ای',
         level: 'همکف',
-        wing: 'واحه غربی ساحل',
+        wing: 'کرانه ساحل صخره‌ای',
         x: 35,
-        y: 50,
-        description: 'استخر اینفینیتی در لبه صخره‌ها و ساحل آرامش',
-        has360Tour: true,
-        tour360Nodes: [
-          {
-            id: 'pool-infinity-spot',
-            title: 'استخر اینفینیتی لبه صخره',
-            panoramaUrl: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=3000&q=85',
-            hotspots: [
-              {
-                id: 'spot-pool-cabanas',
-                targetNodeId: 'pool-cabana-spot',
-                title: 'آلاچیق‌ها و تخت‌های آفتاب ساحلی',
-                yaw: 160,
-                pitch: -6,
-              },
-            ],
-          },
-          {
-            id: 'pool-cabana-spot',
-            title: 'آلاچیق‌های اختصاصی ساحل',
-            panoramaUrl: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=3000&q=85',
-            hotspots: [
-              {
-                id: 'spot-back-infinity',
-                targetNodeId: 'pool-infinity-spot',
-                title: 'بازگشت به لبه استخر',
-                yaw: 340,
-                pitch: -2,
-              },
-            ],
-          },
-        ],
+        y: 48,
+        description: 'استخر آبگرم متصل به افق دریا',
+        experiencePackageId: 'exp-beach-cabanas',
       },
       {
-        id: 'hs-gate',
-        nodeId: 'gate',
-        title: 'درگاه ورودی و حیاط سرو',
+        id: 'hs-cabanas',
+        nodeId: 'pool',
+        title: 'کاباناهای اختصاصی VIP ساحل',
         level: 'همکف',
-        wing: 'محوطه ورودی جنوبی',
+        wing: 'نخلستان ساحلی غربی',
         x: 65,
-        y: 50,
-        description: 'ورودی تشریفاتی و حیاط آب‌نماهای سرو',
-        has360Tour: true,
-        tour360Nodes: [
-          {
-            id: 'gate-courtyard',
-            title: 'حیاط تشریفاتی آب‌نما و سرو',
-            panoramaUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=3000&q=85',
-            hotspots: [],
-          },
-        ],
+        y: 52,
+        description: 'آلاچیق‌های لوکس با تخت‌های حریر و پیشخدمت ساحلی',
+        experiencePackageId: 'exp-beach-cabanas',
       },
     ],
   },
@@ -602,18 +956,94 @@ export const useThemeAndSiteStore = create<ThemeAndSiteState>((set, get) => ({
   radius: 'smooth',
   activeSiteId: 'laura-palace',
   sites: INITIAL_SITES,
+  packages: INITIAL_PACKAGES,
   rooms: INITIAL_ROOMS,
   bookings: INITIAL_BOOKINGS,
   preSelectedRoomId: null,
   floors: INITIAL_FLOORS,
   activeFloorId: 'fl-1',
   hotelMap: INITIAL_HOTEL_MAP,
+  dedicatedExperiences: INITIAL_DEDICATED_EXPERIENCES,
+  activeExperienceId: null,
 
   setSiteTheme: (theme) => set({ siteTheme: theme }),
   setPanelTheme: (theme) => set({ panelTheme: theme }),
   setRadius: (radius) => set({ radius }),
   setActiveSiteId: (siteId) => set({ activeSiteId: siteId }),
   setPreSelectedRoomId: (roomId) => set({ preSelectedRoomId: roomId }),
+  setActiveExperienceId: (id) => set({ activeExperienceId: id }),
+
+  addDedicatedExperience: (exp) =>
+    set((state) => ({
+      dedicatedExperiences: [...state.dedicatedExperiences, exp],
+    })),
+
+  updateDedicatedExperience: (id, partial) =>
+    set((state) => ({
+      dedicatedExperiences: state.dedicatedExperiences.map((exp) =>
+        exp.id === id ? { ...exp, ...partial } : exp
+      ),
+    })),
+
+  removeDedicatedExperience: (id) =>
+    set((state) => ({
+      dedicatedExperiences: state.dedicatedExperiences.filter((exp) => exp.id !== id),
+    })),
+
+  addSequenceToExperience: (expId, seq) =>
+    set((state) => ({
+      dedicatedExperiences: state.dedicatedExperiences.map((exp) =>
+        exp.id === expId ? { ...exp, sequences: [...exp.sequences, seq] } : exp
+      ),
+    })),
+
+  updateExperienceSequence: (expId, seqId, partial) =>
+    set((state) => ({
+      dedicatedExperiences: state.dedicatedExperiences.map((exp) =>
+        exp.id === expId
+          ? {
+              ...exp,
+              sequences: exp.sequences.map((s) =>
+                s.id === seqId ? { ...s, ...partial } : s
+              ),
+            }
+          : exp
+      ),
+    })),
+
+  removeExperienceSequence: (expId, seqId) =>
+    set((state) => ({
+      dedicatedExperiences: state.dedicatedExperiences.map((exp) =>
+        exp.id === expId
+          ? {
+              ...exp,
+              sequences: exp.sequences.filter((s) => s.id !== seqId),
+              transitions: exp.transitions.filter(
+                (t) => t.fromSequenceId !== seqId && t.toSequenceId !== seqId
+              ),
+            }
+          : exp
+      ),
+    })),
+
+  addTransitionToExperience: (expId, trans) =>
+    set((state) => ({
+      dedicatedExperiences: state.dedicatedExperiences.map((exp) =>
+        exp.id === expId ? { ...exp, transitions: [...exp.transitions, trans] } : exp
+      ),
+    })),
+
+  removeExperienceTransition: (expId, transId) =>
+    set((state) => ({
+      dedicatedExperiences: state.dedicatedExperiences.map((exp) =>
+        exp.id === expId
+          ? {
+              ...exp,
+              transitions: exp.transitions.filter((t) => t.id !== transId),
+            }
+          : exp
+      ),
+    })),
 
   setActiveFloorId: (floorId) => set({ activeFloorId: floorId }),
 
@@ -660,6 +1090,21 @@ export const useThemeAndSiteStore = create<ThemeAndSiteState>((set, get) => ({
           ? { ...f, hotspots: f.hotspots.filter((h) => h.id !== hotspotId) }
           : f
       ),
+    })),
+
+  updatePackage: (id, partial) =>
+    set((state) => ({
+      packages: state.packages.map((p) => (p.id === id ? { ...p, ...partial } : p)),
+    })),
+
+  addPackage: (pkg) =>
+    set((state) => ({
+      packages: [pkg, ...state.packages],
+    })),
+
+  removePackage: (id) =>
+    set((state) => ({
+      packages: state.packages.filter((p) => p.id !== id),
     })),
 
   updateSiteConfig: (siteId, partial) =>

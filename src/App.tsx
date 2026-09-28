@@ -23,12 +23,18 @@ import { HotelMapPage } from './components/map/HotelMapPage';
 import { NavigationTimeline } from './components/NavigationTimeline';
 import { LuxuryBookingPage } from './components/booking/LuxuryBookingPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { DedicatedExperiencePlayer } from './components/DedicatedExperiencePlayer';
 import { audioAmbiance } from './services/AudioAmbienceEngine';
 import { useThemeAndSiteStore } from './store/useThemeAndSiteStore';
 
 export default function App() {
   const graph = hotelExperienceGraphData;
-  const { setPreSelectedRoomId } = useThemeAndSiteStore();
+  const { setPreSelectedRoomId, dedicatedExperiences } = useThemeAndSiteStore();
+
+  // پخش‌کننده تجربه اختصاصی فعال (مستقل از صفحه اصلی سایت)
+  const [activeDedicatedExpId, setActiveDedicatedExpId] = useState<string | null>(null);
+  const [activeDedicatedSeqId, setActiveDedicatedSeqId] = useState<string | undefined>(undefined);
+  const [dedicatedExpReturnView, setDedicatedExpReturnView] = useState<'EXPERIENCE' | 'MAP' | 'BOOKING'>('EXPERIENCE');
 
   // بررسی وضعیت ادمین بر اساس پارامتر URL یا هش (#admin یا ?admin=true)
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
@@ -146,14 +152,40 @@ export default function App() {
     [currentNodeId]
   );
 
-  // ۱. حالت ادمین: پنل مدیریت جامع هتل (سیستم تم، شخصی‌سازی سایت‌ها، ماتریس دسترسی و گراف)
+  // ۱. حالت پخش‌کننده تجربه اختصاصی (Bespoke Experience Tour Player)
+  if (activeDedicatedExpId) {
+    const activeExp = dedicatedExperiences.find((e) => e.id === activeDedicatedExpId);
+    if (activeExp) {
+      return (
+        <DedicatedExperiencePlayer
+          experience={activeExp}
+          initialSequenceId={activeDedicatedSeqId}
+          onClose={() => {
+            setActiveDedicatedExpId(null);
+            setActiveDedicatedSeqId(undefined);
+            setActiveView(dedicatedExpReturnView);
+          }}
+          onBookNow={(exp) => {
+            setActiveDedicatedExpId(null);
+            setActiveDedicatedSeqId(undefined);
+            if (exp.category === 'suite') {
+              setPreSelectedRoomId('suite-penthouse');
+            }
+            setActiveView('BOOKING');
+          }}
+        />
+      );
+    }
+  }
+
+  // ۲. حالت ادمین: پنل مدیریت جامع هتل (سیستم تم، شخصی‌سازی سایت‌ها، ماتریس دسترسی و گراف)
   if (activeView === 'ADMIN') {
     return (
       <AdminDashboard onReturnToExperience={() => setActiveView('EXPERIENCE')} />
     );
   }
 
-  // ۲. حالت صفحه تمام‌صفحه نقشه و پلان معماری هتل (تصویر یا ویدیو با نشانگرهای تعاملی و دکمه بک)
+  // ۳. حالت صفحه تمام‌صفحه نقشه و پلان معماری هتل (تصویر یا ویدیو با نشانگرهای تعاملی و دکمه بک)
   if (activeView === 'MAP') {
     return (
       <HotelMapPage
@@ -167,11 +199,64 @@ export default function App() {
           }, 50);
         }}
         onOpenAdmin={() => setActiveView('ADMIN')}
+        onSelectExperience={(expId, initialSeqId) => {
+          setActiveDedicatedExpId(expId);
+          setActiveDedicatedSeqId(initialSeqId);
+          setDedicatedExpReturnView('MAP');
+        }}
+        onBookExperience={(expId) => {
+          const matchingExp = dedicatedExperiences.find((e) => e.id === expId);
+          if (matchingExp?.category === 'suite') {
+            setPreSelectedRoomId('suite-penthouse');
+          }
+          setActiveView('BOOKING');
+        }}
       />
     );
   }
 
-  // ۳. حالت اصلی (شامل گشت سینمایی و ویزارد رزرو داک‌شده مستقیماً زیر هدر اصلی سایت)
+  // ۴. حالت صفحه اختصاصی ویزارد رزرواسیون هتل (Standalone Luxury Booking Wizard Layout)
+  if (activeView === 'BOOKING') {
+    return (
+      <div className="relative w-screen h-screen overflow-y-auto overflow-x-hidden bg-neutral-950 text-neutral-100 font-sans selection:bg-amber-400 selection:text-neutral-950">
+        <LuxuryBookingPage
+          onBackToExperience={() => setActiveView('EXPERIENCE')}
+          onPreviewExperience={(sceneOrExpId) => {
+            const normalized = sceneOrExpId.toLowerCase();
+            const matchingExp = dedicatedExperiences.find(
+              (e) =>
+                e.id === sceneOrExpId ||
+                e.id.includes(sceneOrExpId) ||
+                sceneOrExpId.includes(e.id) ||
+                e.sequences.some((s) => s.id === sceneOrExpId) ||
+                (normalized.includes('penthouse') && e.id.includes('penthouse')) ||
+                (normalized.includes('dining') && e.id.includes('dining')) ||
+                (normalized.includes('spa') && e.id.includes('spa')) ||
+                (normalized.includes('pool') && e.id.includes('beach')) ||
+                (normalized.includes('cabana') && e.id.includes('cabana')) ||
+                (normalized.includes('cafe') && e.id.includes('cafe')) ||
+                (normalized.includes('game') && e.id.includes('game'))
+            );
+
+            if (matchingExp) {
+              setActiveDedicatedExpId(matchingExp.id);
+              setActiveDedicatedSeqId(
+                matchingExp.sequences.some((s) => s.id === sceneOrExpId) ? sceneOrExpId : undefined
+              );
+              setDedicatedExpReturnView('BOOKING');
+            } else {
+              setActiveView('EXPERIENCE');
+              setTimeout(() => {
+                handleJumpToScene(sceneOrExpId);
+              }, 60);
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
+  // ۵. حالت اصلی (گشت سینمایی هتل با توالی‌سنج تعاملی ویدیوها و هدر اختصاصی سایت)
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-neutral-950 text-neutral-100 select-none font-sans">
       {/* =========================================================================
@@ -185,21 +270,20 @@ export default function App() {
         onStatusChange={handleStatusChange}
         onTransitionStart={handleTransitionStart}
         onTransitionEnd={handleTransitionEnd}
-        enableScrollScrubbing={activeView !== 'BOOKING'}
+        enableScrollScrubbing={true}
       />
 
       {/* =========================================================================
           لایه Z-20: اطلاعات فضا، عنوان و دکمه باز کردن صفحه رزرواسیون (تنها در حالت گشت)
           ========================================================================= */}
-      {activeView !== 'BOOKING' && (
-        <SpaceInfoOverlay
-          currentNode={currentNode}
-          isTransitioning={isTransitioning}
-          onOpenBooking={handleOpenBooking}
-          currentIndex={currentIndex !== -1 ? currentIndex : 0}
-          totalScenes={totalScenes}
-        />
-      )}
+      <SpaceInfoOverlay
+        currentNode={currentNode}
+        isTransitioning={isTransitioning}
+        onOpenBooking={handleOpenBooking}
+        currentIndex={currentIndex !== -1 ? currentIndex : 0}
+        totalScenes={totalScenes}
+        onSelectScene={handleJumpToScene}
+      />
 
       {/* =========================================================================
           لایه Z-40: هدر لوکس هتل (Main Site Header)
@@ -218,19 +302,8 @@ export default function App() {
         transitionSourceTitle={transitionSourceTitle}
         transitionTargetTitle={transitionTargetTitle}
         isReverseTransition={isReverseTransition}
-        isBookingOpen={activeView === 'BOOKING'}
+        isBookingOpen={false}
       />
-
-      {/* =========================================================================
-          لایه Z-30: ویزارد رزرواسیون کاملاً شفاف و داک‌شده مستقیماً زیر هدر اصلی سایت
-          ========================================================================= */}
-      {activeView === 'BOOKING' && (
-        <div className="absolute inset-x-0 top-[68px] sm:top-[80px] md:top-[88px] bottom-0 z-30 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-amber-400/30">
-          <LuxuryBookingPage
-            onBackToExperience={() => setActiveView('EXPERIENCE')}
-          />
-        </div>
-      )}
     </main>
   );
 }

@@ -147,6 +147,10 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
     // وضعیت کش منبع ویدیویی باکیفیت (High-Res) سکانس بعدی (برای مینی‌اورلی لودینگ در اتصالات کند)
     const [isNextSceneCached, setIsNextSceneCached] = useState<boolean>(false);
 
+    // رصد وضعیت بافرینگ شبکه و ترنزیشن ویدیویی جهت فعال‌سازی اسکلتون و اسپینر اشرافی
+    const [isTransitionVideoBuffering, setIsTransitionVideoBuffering] = useState<boolean>(false);
+    const [isAmbientVideoBuffering, setIsAmbientVideoBuffering] = useState<boolean>(false);
+
     const isTransitioningRef = useRef<boolean>(false);
     const currentEdgeRef = useRef<TransitionEdge | null>(null);
     const targetNodeIdRef = useRef<string | null>(null);
@@ -180,6 +184,11 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
 
     // زمان‌بند جلوگیری از پرش سکانس‌ها در یک سوایپ ممتد (Cooldown after arrival)
     const arrivalCooldownUntilRef = useRef<number>(0);
+    const arrivalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // ارجاع مستقیم به المان‌های ویدیویی برای آزادسازی قطعی بافرها در هنگام unmount
+    const ambientVideoRef = useRef<HTMLVideoElement | null>(null);
+    const transitionVideoRef = useRef<HTMLVideoElement | null>(null);
 
     // ترشولد شتاب و سقف سرعت سینمایی برای مهار سوایپ‌های محکم (Speed Ceiling & Acceleration Governor)
     const transitionStartTimeRef = useRef<number>(0);
@@ -299,8 +308,12 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
       // ۱. به‌روزرسانی تاریخچه زمانی دسترسی گره فعال در ثبّات LRU
       lruCacheRef.current.touch(currentNode.id, now);
 
-      // الف) پخش نوای آرامش‌بخش سکانس فعال
+      // الف) پخش نوای آرامش‌بخش سکانس فعال و فعال‌سازی لایه صوتی اختصاصی فضا
       audioAmbiance.playAmbiance(currentNode.audioProfile.tone, currentNode.audioProfile.volume);
+      audioAmbiance.setRoomAmbientLayer(currentNode.audioProfile.tone, currentNode.audioProfile.volume);
+
+      // پیش‌بارگذاری اولیه هوشمند بر اساس گره جاری
+      preloadManager.predictivePreloadByVelocity(graph, currentNode.id, 0.4, 'forward');
 
       // ب) گرم‌کردن و پیش‌بارگذاری فرکانس‌ها و منابع صوتی گره‌های مجاور (قبلی و بعدی)
       if (adjacentNeighbors.prevNode) {
@@ -494,6 +507,73 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
     }, [graph.nodes, currentNodeId]);
 
     // =========================================================================
+    // بازرسی عمیق چرخه حیات (Deep Lifecycle Audit): آزادسازی قطعی منابع هنگام Unmount
+    // حذف کلیه لیسنرها، توقف تایمرها و انیمیشن‌های GSAP و آزادسازی حافظه ویدیوها
+    // =========================================================================
+    useEffect(() => {
+      return () => {
+        // ۱. ابطال کلیه تایمرهای فعال
+        if (arrivalTimerRef.current) {
+          clearTimeout(arrivalTimerRef.current);
+          arrivalTimerRef.current = null;
+        }
+        if (momentumContinuationTimerRef.current) {
+          clearTimeout(momentumContinuationTimerRef.current);
+          momentumContinuationTimerRef.current = null;
+        }
+        if (trackpadDebounceTimerRef.current) {
+          clearTimeout(trackpadDebounceTimerRef.current);
+          trackpadDebounceTimerRef.current = null;
+        }
+        if (speedGovernorTimerRef.current) {
+          clearTimeout(speedGovernorTimerRef.current);
+          speedGovernorTimerRef.current = null;
+        }
+
+        // ۲. متوقف‌سازی و تخریب توئین‌ها و تایم‌لاین‌های GSAP
+        if (scrubTweenRef.current) {
+          scrubTweenRef.current.kill();
+          scrubTweenRef.current = null;
+        }
+        if (autoPlayTweenRef.current) {
+          autoPlayTweenRef.current.kill();
+          autoPlayTweenRef.current = null;
+        }
+        if (scrubTimelineRef.current) {
+          scrubTimelineRef.current.kill();
+          scrubTimelineRef.current = null;
+        }
+        if (sequenceTimelineRef.current) {
+          sequenceTimelineRef.current.kill();
+          sequenceTimelineRef.current = null;
+        }
+
+        // ۳. توقف پخش و آزادسازی حافظه بافرهای المان‌های ویدیویی فعال
+        if (ambientVideoRef.current) {
+          try {
+            ambientVideoRef.current.pause();
+            ambientVideoRef.current.removeAttribute('src');
+            ambientVideoRef.current.load();
+          } catch {}
+          ambientVideoRef.current = null;
+        }
+        if (transitionVideoRef.current) {
+          try {
+            transitionVideoRef.current.pause();
+            transitionVideoRef.current.removeAttribute('src');
+            transitionVideoRef.current.load();
+          } catch {}
+          transitionVideoRef.current = null;
+        }
+
+        // ۴. صفر کردن رفرنس‌های حالت ترنزیشن
+        isTransitioningRef.current = false;
+        currentEdgeRef.current = null;
+        targetNodeIdRef.current = null;
+      };
+    }, []);
+
+    // =========================================================================
     // ۲. آغاز ترنزیشن تعاملی (جلو یا دنده عقب)
     // =========================================================================
     const initTransition = useCallback(
@@ -554,6 +634,7 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
         const branchLabel = `branch_${sourceNode?.id}_to_${edge.targetNodeId}`;
         setActiveSequenceLabel(branchLabel);
 
+        setIsTransitionVideoBuffering(true);
         setStatus('TRANSITIONING');
         onStatusChange?.('TRANSITIONING', initialProgress, {
           sourceTitle: srcTitle,
@@ -589,7 +670,11 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
         // تنظیم مهلت امنیتی (Cooldown) ۳۵۰ میلی‌ثانیه برای جلوگیری از بلعیده شدن سکانس‌های بعدی در یک سوایپ کشیده
         arrivalCooldownUntilRef.current = Date.now() + 380;
 
-        setTimeout(() => {
+        if (arrivalTimerRef.current) {
+          clearTimeout(arrivalTimerRef.current);
+        }
+        arrivalTimerRef.current = setTimeout(() => {
+          arrivalTimerRef.current = null;
           if (scrubTweenRef.current) {
             scrubTweenRef.current.kill();
             scrubTweenRef.current = null;
@@ -605,8 +690,15 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
           targetProgressRef.current = 0;
           setTransitionProgress(0);
           setActiveTransitionEdge(null);
+          setIsTransitionVideoBuffering(false);
           setStatus('IDLE_LOOP');
           onStatusChange?.('IDLE_LOOP', 0);
+
+          // تثبیت لایه صوتی اختصاصی سکانس مقصد
+          const arrivedNode = graph.nodes.find((n) => n.id === targetNodeId);
+          if (arrivedNode) {
+            audioAmbiance.setRoomAmbientLayer(arrivedNode.audioProfile.tone, arrivedNode.audioProfile.volume);
+          }
 
           // تثبیت برچسب گره مقصد در تایم‌لاین غیرخطی GSAP
           const arrivalLabel = `node_${targetNodeId}`;
@@ -621,6 +713,10 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
 
     // لغو ترنزیشن و بازگشت به سکانس مبدأ
     const cancelBackToOrigin = useCallback(() => {
+      if (arrivalTimerRef.current) {
+        clearTimeout(arrivalTimerRef.current);
+        arrivalTimerRef.current = null;
+      }
       if (momentumContinuationTimerRef.current) {
         clearTimeout(momentumContinuationTimerRef.current);
         momentumContinuationTimerRef.current = null;
@@ -642,8 +738,15 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
       targetProgressRef.current = 0;
       setTransitionProgress(0);
       setActiveTransitionEdge(null);
+      setIsTransitionVideoBuffering(false);
       setStatus('IDLE_LOOP');
       onStatusChange?.('IDLE_LOOP', 0);
+
+      // بازگشت لایه صوتی اختصاصی سکانس مبدأ
+      const originNode = graph.nodes.find((n) => n.id === originNodeIdRef.current);
+      if (originNode) {
+        audioAmbiance.setRoomAmbientLayer(originNode.audioProfile.tone, originNode.audioProfile.volume);
+      }
 
       // بازگشت برچسب تایم‌لاین به گره مبدأ
       const originLabel = `node_${originNodeIdRef.current}`;
@@ -739,6 +842,14 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
             if (res.count > 0) setGpuTexturesPreloadedCount(res.count);
           });
 
+        // پیش‌بارگذاری هوشمند و بلادرنگ سکانس بعدی بر اساس شتاب و بردار اسکرول (Predictive Video Preloader)
+        preloadManager.predictivePreloadByVelocity(
+          graph,
+          currentNodeRef.current.id,
+          delta * 0.05,
+          detectedDirection
+        );
+
         // ۱. اگر ترنزیشنی در جریان نیست (آغاز ملایم ترنزیشن با آستانه مطمئن):
         if (!isTransitioningRef.current) {
           // آستانه آغاز ترنزیشن به ۱۴ واحد افزایش یافت تا تکان‌های تصادفی فعالش نکنند
@@ -794,6 +905,14 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
         const instantVelocity = (clampedDelta * 0.00095) / (dt / 16.67);
         scrubVelocityRef.current = scrubVelocityRef.current * 0.65 + instantVelocity * 0.35;
 
+        // تنظیم بافر پری‌لودر هوشمند بر اساس شتاب متحرک کاربر
+        preloadManager.predictivePreloadByVelocity(
+          graph,
+          currentNodeRef.current.id,
+          scrubVelocityRef.current,
+          scrubVelocityRef.current >= 0 ? 'forward' : 'backward'
+        );
+
         // سقف حداکثر پیشروی پروگرس در هر فریم (Progress Rate Ceiling):
         // در هر تکانه، پیشروی از ۰.۰۱۸ فراتر نمی‌رود تا حس وزن دوربین سینمایی کاملاً لمس شود
         const step = Math.sign(clampedDelta) * Math.min(0.018, Math.abs(clampedDelta * 0.00095));
@@ -832,6 +951,17 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
             const interpolatedProgress = animProxy.progress;
             progressRef.current = interpolatedProgress;
             setTransitionProgress(interpolatedProgress);
+
+            // مدولاسیون پویای سانداسکیپ: شیفت فرکانس و فید تدریجی لایه‌های صوتی با پیشروی ترنزیشن
+            const fromTone = currentNodeRef.current?.audioProfile?.tone || 'welcoming_strings';
+            const toNode = graph.nodes.find((n) => n.id === targetNodeIdRef.current);
+            const toTone = toNode?.audioProfile?.tone || 'marble_hall_reverb';
+            audioAmbiance.modulateTransitionSoundscape(
+              interpolatedProgress,
+              fromTone,
+              toTone,
+              scrubVelocityRef.current
+            );
 
             // همگام‌سازی موقعیت خط زمان اسکرول‌محور GSAP
             if (scrubTimelineRef.current) {
@@ -920,6 +1050,17 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
                 const prog = animProxy.progress;
                 progressRef.current = prog;
                 setTransitionProgress(prog);
+
+                // مدولاسیون پویای سانداسکیپ در فاز تکانه و فرود
+                const fromTone = currentNodeRef.current?.audioProfile?.tone || 'welcoming_strings';
+                const toNode = graph.nodes.find((n) => n.id === targetNodeIdRef.current);
+                const toTone = toNode?.audioProfile?.tone || 'marble_hall_reverb';
+                audioAmbiance.modulateTransitionSoundscape(
+                  prog,
+                  fromTone,
+                  toTone,
+                  residualVelocity
+                );
 
                 if (scrubTimelineRef.current) {
                   scrubTimelineRef.current.progress(prog);
@@ -1177,6 +1318,8 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
           };
         }
 
+        preloadManager.predictivePreloadByVelocity(graph, currentNodeRef.current.id, isRev ? -0.8 : 0.8, isRev ? 'backward' : 'forward');
+
         initTransition(edge, 0, isRev, () => {
           if (autoPlayTweenRef.current) {
             autoPlayTweenRef.current.kill();
@@ -1190,6 +1333,13 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
               const p = animProxy.progress;
               progressRef.current = p;
               setTransitionProgress(p);
+
+              // مدولاسیون پویای سانداسکیپ با حرکت خودکار ترنزیشن
+              const fromTone = currentNodeRef.current?.audioProfile?.tone || 'welcoming_strings';
+              const toNode = graph.nodes.find((n) => n.id === targetId);
+              const toTone = toNode?.audioProfile?.tone || 'marble_hall_reverb';
+              audioAmbiance.modulateTransitionSoundscape(p, fromTone, toTone, 0.4);
+
               if (scrubTimelineRef.current) {
                 scrubTimelineRef.current.progress(p);
               }
@@ -1208,6 +1358,9 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
       transitionBackward: () => {
         const res = getBackwardTransition();
         if (!res) return;
+
+        preloadManager.predictivePreloadByVelocity(graph, currentNodeRef.current.id, -0.8, 'backward');
+
         initTransition(res.edge, 0, true, () => {
           if (autoPlayTweenRef.current) {
             autoPlayTweenRef.current.kill();
@@ -1221,6 +1374,13 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
               const p = animProxy.progress;
               progressRef.current = p;
               setTransitionProgress(p);
+
+              // مدولاسیون پویای سانداسکیپ با حرکت دنده عقب
+              const fromTone = currentNodeRef.current?.audioProfile?.tone || 'welcoming_strings';
+              const toNode = graph.nodes.find((n) => n.id === res.edge.targetNodeId);
+              const toTone = toNode?.audioProfile?.tone || 'marble_hall_reverb';
+              audioAmbiance.modulateTransitionSoundscape(p, fromTone, toTone, -0.4);
+
               if (scrubTimelineRef.current) {
                 scrubTimelineRef.current.progress(p);
               }
@@ -1257,25 +1417,93 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
     return (
       <div id="video-experience-sequencer" className="absolute inset-0 w-full h-full overflow-hidden bg-neutral-950 z-0">
         {/* =========================================================================
-            پلیس‌هولدر سکانس (به جای ویدیوی خام) - با تکسچر بافرشده GPU در پس‌زمینه
+            پخش‌کننده ویدیوهای لوپ سینمایی و ترنزیشن‌های حرکتی بین سکانس‌ها
             ========================================================================= */}
+        {currentNode.ambientLoop.landscapeUrl && (
+          <video
+            ref={ambientVideoRef}
+            key={`ambient-${currentNode.id}`}
+            src={currentNode.ambientLoop.landscapeUrl}
+            poster={currentNode.ambientLoop.posterUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            onWaiting={() => setIsAmbientVideoBuffering(true)}
+            onPlaying={() => setIsAmbientVideoBuffering(false)}
+            onLoadedData={() => setIsAmbientVideoBuffering(false)}
+            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ease-in-out pointer-events-none"
+            style={{ opacity: status === 'TRANSITIONING' ? 0.35 : 0.88 }}
+          />
+        )}
+
+        {/* ویدیوی ترنزیشن پویا در حین جابجایی بین سکانس‌ها */}
+        {status === 'TRANSITIONING' && activeTransitionEdge?.video?.landscapeUrl && (
+          <video
+            ref={transitionVideoRef}
+            key={`trans-${activeTransitionEdge.targetNodeId}`}
+            src={activeTransitionEdge.video.landscapeUrl}
+            poster={activeTransitionEdge.video.posterUrl || currentNode.ambientLoop.posterUrl}
+            autoPlay
+            muted
+            playsInline
+            onLoadStart={() => setIsTransitionVideoBuffering(true)}
+            onWaiting={() => setIsTransitionVideoBuffering(true)}
+            onPlaying={() => setIsTransitionVideoBuffering(false)}
+            onLoadedData={() => setIsTransitionVideoBuffering(false)}
+            onCanPlay={() => setIsTransitionVideoBuffering(false)}
+            className="absolute inset-0 w-full h-full object-cover z-10 pointer-events-none transition-opacity duration-300"
+            style={{ opacity: 0.95 }}
+          />
+        )}
+
+        {/* =========================================================================
+            اسکلت شیمر و اسپینر فوق‌لوکس هنگام لودینگ و ترنزیشن‌های شبکه
+            جلوگیری کامل از فریم‌های سیاه و افزایش چشمگیر حس سرعت و روانی بصری
+            ========================================================================= */}
+        {status === 'TRANSITIONING' && isTransitionVideoBuffering && (
+          <div 
+            id="luxury-transition-skeleton"
+            className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center transition-opacity duration-300 ease-out"
+          >
+            {/* پرده اسکلتون تاریک با گرادیان طلایی نوری و افکت بلور اشرافی */}
+            <div className="absolute inset-0 bg-neutral-950/75 backdrop-blur-md" />
+
+            {/* موج نوری شیمر طلایی متالیک که روی فضا حرکت می‌کند */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/10 to-transparent animate-pulse" />
+
+            {/* اسپینر و نشانگر لودینگ مینیمال اشرافی در مرکز */}
+            <div className="relative z-10 flex items-center gap-3.5 px-6 py-3.5 rounded-2xl bg-black/70 border border-white/10 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.85)]">
+              {/* حلقه دوار دوگانه طلایی با نگین کهربایی */}
+              <div className="relative w-8 h-8 flex items-center justify-center shrink-0">
+                <div className="absolute inset-0 rounded-full border border-amber-400/20" />
+                <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-amber-400 border-r-amber-300/60 animate-spin" />
+                <div className="w-2 h-2 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 shadow-[0_0_10px_rgba(251,191,36,0.9)] animate-pulse" />
+              </div>
+
+              {/* عنوان فاخر و نامحسوس */}
+              <div className="flex flex-col text-right">
+                <span className="text-xs font-medium text-amber-200/90 drop-shadow">
+                  آماده‌سازی فریم‌های سینمایی...
+                </span>
+                <span className="text-[10px] text-neutral-400">
+                  {targetNodeTitle ? `انتقال به ${targetNodeTitle}` : 'در حال بارگذاری'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* تکسچر بافرشده و گرادیان‌های لوکس جهت خوانایی متون */}
         <div 
           id="scene-placeholder-canvas"
           className="absolute inset-0 w-full h-full flex flex-col items-center justify-center select-none pointer-events-none"
         >
-          {/* تکسچر باکیفیت بارگذاری‌شده در بافر GPU برای جلوگیری کامل از لکنت فریم */}
-          {currentNode.ambientLoop.posterUrl && (
-            <div 
-              className="absolute inset-0 bg-cover bg-center opacity-30 scale-105 pointer-events-none transition-transform duration-1000 ease-out filter saturate-125 brightness-75"
-              style={{ backgroundImage: `url(${currentNode.ambientLoop.posterUrl})` }}
-            />
-          )}
-
           {/* پس‌زمینه با نورپردازی مخملین و متالیک هتل */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-neutral-900/60 via-neutral-950/80 to-black/95 pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-neutral-900/40 via-neutral-950/60 to-black/90 pointer-events-none" />
 
-          {/* خطوط نوری متالیک */}
-          <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none" />
+          {/* خطوط نوری متالیک در پایین */}
+          <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black via-black/50 to-transparent pointer-events-none" />
         </div>
 
         {/* =========================================================================

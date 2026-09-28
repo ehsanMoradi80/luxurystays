@@ -68,6 +68,8 @@ import { CustomBadge } from '../ui/CustomBadge';
 import { AdaptiveOverlay } from '../ui/AdaptiveOverlay';
 import { FlowCanvas } from '../FlowCanvas';
 import { HotelMapManagerTab } from './HotelMapManagerTab';
+import { SequenceTransitionsManagerTab } from './SequenceTransitionsManagerTab';
+import { DedicatedExperiencesManagerTab } from './DedicatedExperiencesManagerTab';
 import { toPersianDigits, formatPersianPrice } from '../../utils/jalali';
 
 interface AdminDashboardProps {
@@ -83,6 +85,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onReturnToExperi
     sites,
     rooms,
     bookings,
+    dedicatedExperiences,
     setSiteTheme,
     setPanelTheme,
     setRadius,
@@ -92,7 +95,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onReturnToExperi
     updateRoomPrice,
   } = useThemeAndSiteStore();
 
-  const [activeTab, setActiveTab] = useState<string>('themes');
+  const [activeTab, setActiveTab] = useState<string>('dedicated_experiences');
 
   // وضعیت‌های مربوط به کارگاه تست کامپوننت‌ها (Playground)
   const [testInputVal, setTestInputVal] = useState('سوئیت پنت‌هاوس لوکس');
@@ -112,8 +115,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onReturnToExperi
   const currentSite = sites[activeSiteId];
 
   const adminTabs = [
+    { 
+      id: 'dedicated_experiences', 
+      label: 'استودیوی تجربه‌های اختصاصی', 
+      icon: <Sparkles className="w-4 h-4 text-amber-400" />,
+      badge: toPersianDigits(dedicatedExperiences.length)
+    },
+    { id: 'map', label: 'نقشه و طبقات هتل', icon: <Map className="w-4 h-4" /> },
+    { id: 'sequences', label: 'سکانس‌های صفحه اصلی سایت', icon: <Video className="w-4 h-4" /> },
     { id: 'themes', label: 'سیستم تم و ظاهر', icon: <Palette className="w-4 h-4" /> },
-    { id: 'map', label: 'مدیریت نقشه هتل (تصویر/ویدیو)', icon: <Map className="w-4 h-4" /> },
     { id: 'sites', label: 'شخصی‌سازی سایت‌ها', icon: <Building2 className="w-4 h-4" /> },
     { id: 'inventory', label: 'اتاق‌ها و ماتریس دسترسی', icon: <CalendarDays className="w-4 h-4" /> },
     { id: 'playground', label: 'کارگاه کامپوننت‌ها', icon: <Sliders className="w-4 h-4" /> },
@@ -330,9 +340,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onReturnToExperi
         )}
 
         {/* ---------------------------------------------------------------------
+            تب استودیوی ساخت و مدیریت تجربه‌های اختصاصی هتل
+            --------------------------------------------------------------------- */}
+        {activeTab === 'dedicated_experiences' && <DedicatedExperiencesManagerTab />}
+
+        {/* ---------------------------------------------------------------------
             تب مدیریت نقشه هتل: تصویر یا ویدیو و نشانگرهای تعاملی
             --------------------------------------------------------------------- */}
         {activeTab === 'map' && <HotelMapManagerTab />}
+
+        {/* ---------------------------------------------------------------------
+            تب سکانس‌ها و ترنزیشن‌های صفحه اصلی سایت
+            --------------------------------------------------------------------- */}
+        {activeTab === 'sequences' && <SequenceTransitionsManagerTab />}
 
         {/* ---------------------------------------------------------------------
             تب ۲: شخصی‌سازی سایت‌ها و کامپوننت‌های اختصاصی هر سایت

@@ -12,6 +12,15 @@ export interface PreloadStatus {
   progressPercent: number;
 }
 
+export interface PredictivePreloadMetrics {
+  predictedTargetNodeId: string | null;
+  bufferDepth: number;
+  scrollVelocity: number;
+  direction: 'forward' | 'backward';
+  isPrimed: boolean;
+  queuedUrls: string[];
+}
+
 export class VideoPreloadManager {
   private cache: Map<string, HTMLVideoElement> = new Map();
   private placeholderTextureCache: Map<string, HTMLImageElement> = new Map();
@@ -19,7 +28,17 @@ export class VideoPreloadManager {
   private gpuWarmupCanvas: HTMLCanvasElement | null = null;
   private blobUrls: Map<string, string> = new Map();
   private activePreloadRequests: Set<string> = new Set();
+  private primedVideoDecoders: Set<string> = new Set();
   private listeners: Set<(status: PreloadStatus) => void> = new Set();
+
+  private predictiveMetrics: PredictivePreloadMetrics = {
+    predictedTargetNodeId: null,
+    bufferDepth: 1,
+    scrollVelocity: 0,
+    direction: 'forward',
+    isPrimed: false,
+    queuedUrls: [],
+  };
 
   /**
    * Determine whether the client viewport is Portrait or Landscape.
@@ -162,6 +181,131 @@ export class VideoPreloadManager {
 
   public getCachedVideo(url: string): HTMLVideoElement | undefined {
     return this.cache.get(url);
+  }
+
+  /**
+   * =========================================================================
+   * INTELLIGENT PREDICTIVE VIDEO PRELOADER
+   * Dynamically buffers the next sequence(s) and transitional media in the
+   * experience graph based on the user's instantaneous scroll velocity & direction.
+   * =========================================================================
+   */
+  public predictivePreloadByVelocity(
+    graph: HotelExperienceGraph,
+    currentNodeId: string,
+    velocity: number,
+    direction: 'forward' | 'backward'
+  ): PredictivePreloadMetrics {
+    const currentIndex = graph.nodes.findIndex((n) => n.id === currentNodeId);
+    if (currentIndex === -1) return this.predictiveMetrics;
+
+    const speed = Math.abs(velocity);
+    const isForward = direction === 'forward' || velocity > 0;
+    const orientation = this.getDeviceOrientation();
+
+    // 1. Determine Velocity-Adaptive Buffer Depth
+    // High velocity (fast scrubbing): buffer up to 3 sequences ahead
+    // Medium velocity: buffer 2 sequences ahead
+    // Gentle velocity: buffer 1 sequence ahead
+    let bufferDepth = 1;
+    if (speed >= 0.75) {
+      bufferDepth = 3;
+    } else if (speed >= 0.3) {
+      bufferDepth = 2;
+    }
+
+    const queuedUrls: string[] = [];
+    const predictedTargetNode = isForward 
+      ? graph.nodes[currentIndex + 1] 
+      : graph.nodes[currentIndex - 1];
+
+    // 2. Iterate through predicted sequence trajectory
+    for (let step = 1; step <= bufferDepth; step++) {
+      const targetIndex = isForward ? currentIndex + step : currentIndex - step;
+      const targetNode = graph.nodes[targetIndex];
+      if (!targetNode) break;
+
+      // Ambient loop of target sequence
+      const loopUrl = this.resolveMediaUrl(targetNode.ambientLoop, orientation);
+      queuedUrls.push(loopUrl);
+      this.preloadVideo(loopUrl);
+      this.primeVideoDecoder(loopUrl);
+
+      // Texture upload into GPU VRAM
+      if (targetNode.ambientLoop.posterUrl) {
+        this.preloadAndCacheTextureToGPU(targetNode.ambientLoop.posterUrl).catch(() => {});
+      }
+
+      // Connecting transition video between consecutive steps
+      const fromNode = isForward ? graph.nodes[targetIndex - 1] : graph.nodes[targetIndex + 1];
+      if (fromNode) {
+        const transEdge = fromNode.transitions.find((t) => t.targetNodeId === targetNode.id);
+        if (transEdge) {
+          const transUrl = this.resolveMediaUrl(transEdge.video, orientation);
+          queuedUrls.push(transUrl);
+          this.preloadVideo(transUrl);
+          this.primeVideoDecoder(transUrl);
+
+          if (transEdge.video.posterUrl) {
+            this.preloadAndCacheTextureToGPU(transEdge.video.posterUrl).catch(() => {});
+          }
+        }
+      }
+    }
+
+    // 3. Update predictive metrics
+    this.predictiveMetrics = {
+      predictedTargetNodeId: predictedTargetNode?.id || null,
+      bufferDepth,
+      scrollVelocity: velocity,
+      direction,
+      isPrimed: queuedUrls.some((u) => this.isVideoCached(u) || this.primedVideoDecoders.has(u)),
+      queuedUrls,
+    };
+
+    return this.predictiveMetrics;
+  }
+
+  /**
+   * Hardware Video Decoder Buffer Warming:
+   * Primes the browser's hardware video decoder pipeline on an offscreen element
+   * to ensure macroblocks and keyframes are decoded into GPU VRAM with zero latency.
+   */
+  public primeVideoDecoder(url: string): Promise<boolean> {
+    if (this.primedVideoDecoders.has(url)) return Promise.resolve(true);
+
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = 'auto';
+      video.crossOrigin = 'anonymous';
+
+      const cleanup = () => {
+        this.primedVideoDecoders.add(url);
+        resolve(true);
+      };
+
+      video.addEventListener('loadeddata', () => {
+        // Minor seek to force initial frame decoding in hardware decoder
+        try {
+          video.currentTime = 0.04;
+        } catch {}
+        cleanup();
+      }, { once: true });
+
+      video.addEventListener('error', cleanup, { once: true });
+
+      // Guard timeout
+      setTimeout(cleanup, 2200);
+
+      video.src = url;
+      video.load();
+    });
+  }
+
+  public getPredictiveMetrics(): PredictivePreloadMetrics {
+    return this.predictiveMetrics;
   }
 
   /**
@@ -487,10 +631,49 @@ export class VideoPreloadManager {
   }
 
   public clear() {
+    // 1. Unload and unmount all cached HTMLVideoElement instances
+    for (const videoEl of this.cache.values()) {
+      try {
+        videoEl.pause();
+        videoEl.removeAttribute('src');
+        videoEl.load();
+      } catch {}
+    }
     this.cache.clear();
-    this.blobUrls.forEach((blob) => URL.revokeObjectURL(blob));
+
+    // 2. Revoke all allocated object URLs
+    this.blobUrls.forEach((blob) => {
+      try {
+        URL.revokeObjectURL(blob);
+      } catch {}
+    });
     this.blobUrls.clear();
     this.activePreloadRequests.clear();
+
+    // 3. Explicitly close GPU ImageBitmap references
+    for (const bitmap of this.gpuTextureCache.values()) {
+      try {
+        bitmap.close();
+      } catch {}
+    }
+    this.gpuTextureCache.clear();
+
+    // 4. Detach placeholder image listeners and source references
+    for (const img of this.placeholderTextureCache.values()) {
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+    }
+    this.placeholderTextureCache.clear();
+
+    // 5. Clear decoder primes and listeners
+    this.primedVideoDecoders.clear();
+    this.listeners.clear();
+  }
+
+  public destroy() {
+    this.clear();
+    this.gpuWarmupCanvas = null;
   }
 }
 
