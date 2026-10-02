@@ -31,6 +31,10 @@ export interface TransitionEdge {
   video: VideoMediaVariant;
   /** Reverse transition video if return sequence is different (optional) */
   reverseVideo?: VideoMediaVariant;
+  /** Optional audio file for transition ambiance (plays alongside video) */
+  audioUrl?: string;
+  /** Reverse transition audio if different from forward */
+  reverseAudioUrl?: string;
   /** Sound design cue triggered during transition (e.g. 'door_glide_chime') */
   soundCue?: string;
   /** Direction in 3D space: forward, backward, left, right, elevate */
@@ -120,6 +124,8 @@ export interface DedicatedSequence {
   description?: string;
   videoUrl: string; // ambient loop video
   posterUrl?: string;
+  /** Optional audio file for scene ambiance (plays alongside loop video) */
+  audioUrl?: string;
   duration?: number;
 }
 
@@ -129,6 +135,10 @@ export interface DedicatedTransition {
   toSequenceId: string;
   label: string; // 'گذر به اتاق خواب مستر'
   videoUrl: string; // transition video
+  /** Optional audio file for transition ambiance (plays alongside video) */
+  audioUrl?: string;
+  /** Reverse transition audio if different from forward */
+  reverseAudioUrl?: string;
   duration?: number;
   direction?: 'forward' | 'backward' | 'ascend' | 'descend' | 'lateral';
 }

@@ -300,129 +300,154 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
       return { prevNode, nextNode };
     }, [graph.nodes, currentIndex, totalScenes]);
 
-    // مدیر چرخه حیات منابع بر اساس سیاست LRU (Least Recently Used):
-    useEffect(() => {
-      if (!currentNode) return;
+    // Manager of resource lifecycle based on LRU (Least Recently Used) policy:
+        useEffect(() => {
+          if (!currentNode) return;
 
-      const now = Date.now();
-      // ۱. به‌روزرسانی تاریخچه زمانی دسترسی گره فعال در ثبّات LRU
-      lruCacheRef.current.touch(currentNode.id, now);
+          const now = Date.now();
+          // 1. Update access timestamp for active node in LRU registry
+          lruCacheRef.current.touch(currentNode.id, now);
 
-      // الف) پخش نوای آرامش‌بخش سکانس فعال و فعال‌سازی لایه صوتی اختصاصی فضا
-      audioAmbiance.playAmbiance(currentNode.audioProfile.tone, currentNode.audioProfile.volume);
-      audioAmbiance.setRoomAmbientLayer(currentNode.audioProfile.tone, currentNode.audioProfile.volume);
+          // a) Play ambiance of active sequence and activate room-specific audio layer
+          audioAmbiance.playAmbiance(currentNode.audioProfile.tone, currentNode.audioProfile.volume);
+          audioAmbiance.setRoomAmbientLayer(currentNode.audioProfile.tone, currentNode.audioProfile.volume);
 
-      // پیش‌بارگذاری اولیه هوشمند بر اساس گره جاری
-      preloadManager.predictivePreloadByVelocity(graph, currentNode.id, 0.4, 'forward');
+          // Smart initial preload based on current node
+          preloadManager.predictivePreloadByVelocity(graph, currentNode.id, 0.4, 'forward');
 
-      // ب) گرم‌کردن و پیش‌بارگذاری فرکانس‌ها و منابع صوتی گره‌های مجاور (قبلی و بعدی)
-      if (adjacentNeighbors.prevNode) {
-        lruCacheRef.current.touch(adjacentNeighbors.prevNode.id, now - 100);
-        audioAmbiance.warmUpAudioProfile(adjacentNeighbors.prevNode.audioProfile.tone);
-      }
-      if (adjacentNeighbors.nextNode) {
-        lruCacheRef.current.touch(adjacentNeighbors.nextNode.id, now - 100);
-        audioAmbiance.warmUpAudioProfile(adjacentNeighbors.nextNode.audioProfile.tone);
-      }
-
-      // ج) پیش‌بارگذاری بافر و ساختار ویدیویی/مدیای گره‌های مجاور در موتور پری‌لود
-      preloadManager.preloadNodeNeighborhood(graph, currentNode.id);
-
-      // د) پیاده‌سازی و اجرای سیاست کش LRU:
-      // گره‌های مجاز و محافظت‌شده در پنجره شاخص فعال (فاصله <= ۲ گام)
-      const maxProtectedDistance = 2;
-      const protectedNodes = graph.nodes.filter((_, idx) => Math.abs(idx - currentIndex) <= maxProtectedDistance);
-      const protectedTones = new Set(protectedNodes.map((n) => n.audioProfile.tone));
-
-      // تجمیع کلیه آدرس‌های تصاویر پلیس‌هولدر محافظت‌شده (پوستر لوپ و ترنزیشن‌ها)
-      const protectedPlaceholderUrls = new Set<string>();
-      protectedNodes.forEach((node) => {
-        if (node.ambientLoop.posterUrl) {
-          protectedPlaceholderUrls.add(node.ambientLoop.posterUrl);
-        }
-        node.transitions.forEach((t) => {
-          if (t.video.posterUrl) {
-            protectedPlaceholderUrls.add(t.video.posterUrl);
+          // b) Warm up and preload audio frequencies and resources of adjacent nodes (prev and next)
+          if (adjacentNeighbors.prevNode) {
+            lruCacheRef.current.touch(adjacentNeighbors.prevNode.id, now - 100);
+            audioAmbiance.warmUpAudioProfile(adjacentNeighbors.prevNode.audioProfile.tone);
           }
-          if (t.reverseVideo?.posterUrl) {
-            protectedPlaceholderUrls.add(t.reverseVideo.posterUrl);
+          if (adjacentNeighbors.nextNode) {
+            lruCacheRef.current.touch(adjacentNeighbors.nextNode.id, now - 100);
+            audioAmbiance.warmUpAudioProfile(adjacentNeighbors.nextNode.audioProfile.tone);
           }
-        });
-      });
 
-      // شناسایی گره‌های دورافتاده با فاصله بیش از ۲ گام از شاخص فعال (distance > 2)
-      const distantCandidates = graph.nodes
-        .map((node, index) => ({
-          node,
-          index,
-          distance: Math.abs(index - currentIndex),
-          lastAccess: lruCacheRef.current.getLastAccess(node.id),
-        }))
-        .filter((item) => item.distance > maxProtectedDistance);
+          // c) Preload video/media buffers of adjacent nodes in preload engine
+          preloadManager.preloadNodeNeighborhood(graph, currentNode.id);
 
-      // مرتب‌سازی کاندیداها طبق سیاست LRU: کمترین استفاده اخیر (قدیمی‌ترین دسترسی در ابتدا)
-      const candidateIds = distantCandidates.map((c) => c.node.id);
-      const orderedEvictionNodeIds = lruCacheRef.current.getLRUOrder(candidateIds);
+          // d) LRU cache policy implementation and execution:
+          // Nodes allowed and protected within active index window (distance <= 2 steps)
+          const maxProtectedDistance = 2;
+          const protectedNodes = graph.nodes.filter((_, idx) => Math.abs(idx - currentIndex) <= maxProtectedDistance);
+          const protectedTones = new Set(protectedNodes.map((n) => n.audioProfile.tone));
 
-      // ۱. تخلیه صریح پلیس‌هولدرهای سکانس (Scene Placeholders) برای گره‌های بیش از ۲ گام فاصله:
-      let purgedPlaceholdersCount = 0;
-      orderedEvictionNodeIds.forEach((nodeId) => {
-        const distantNode = graph.nodes.find((n) => n.id === nodeId);
-        if (!distantNode) return;
+          // Aggregate all protected placeholder image URLs (loop posters and transitions)
+          const protectedPlaceholderUrls = new Set<string>();
+          // Also track protected audio URLs
+          const protectedAudioUrls = new Set<string>();
+          protectedNodes.forEach((node) => {
+            if (node.ambientLoop.posterUrl) {
+              protectedPlaceholderUrls.add(node.ambientLoop.posterUrl);
+            }
+            // Protect scene audio if available
+            if ((node.ambientLoop as any).audioUrl) {
+              protectedAudioUrls.add((node.ambientLoop as any).audioUrl);
+            }
+            node.transitions.forEach((t) => {
+              if (t.video.posterUrl) {
+                protectedPlaceholderUrls.add(t.video.posterUrl);
+              }
+              if (t.reverseVideo?.posterUrl) {
+                protectedPlaceholderUrls.add(t.reverseVideo.posterUrl);
+              }
+              // Protect transition audio if available
+              if (t.audioUrl) {
+                protectedAudioUrls.add(t.audioUrl);
+              }
+              if (t.reverseAudioUrl) {
+                protectedAudioUrls.add(t.reverseAudioUrl);
+              }
+            });
+          });
 
-        // پلیس‌هولدر اصلی لوپ سکانس
-        if (distantNode.ambientLoop.posterUrl && !protectedPlaceholderUrls.has(distantNode.ambientLoop.posterUrl)) {
-          preloadManager.unloadPlaceholderTexture(distantNode.ambientLoop.posterUrl);
-          purgedPlaceholdersCount++;
-        }
+          // Identify distant nodes with distance > 2 from active index
+          const distantCandidates = graph.nodes
+            .map((node, index) => ({
+              node,
+              index,
+              distance: Math.abs(index - currentIndex),
+              lastAccess: lruCacheRef.current.getLastAccess(node.id),
+            }))
+            .filter((item) => item.distance > maxProtectedDistance);
 
-        // پلیس‌هولدرهای ترنزیشن‌های رو به جلو و دنده عقب
-        distantNode.transitions.forEach((t) => {
-          if (t.video.posterUrl && !protectedPlaceholderUrls.has(t.video.posterUrl)) {
-            preloadManager.unloadPlaceholderTexture(t.video.posterUrl);
-            purgedPlaceholdersCount++;
-          }
-          if (t.reverseVideo?.posterUrl && !protectedPlaceholderUrls.has(t.reverseVideo.posterUrl)) {
-            preloadManager.unloadPlaceholderTexture(t.reverseVideo.posterUrl);
-            purgedPlaceholdersCount++;
-          }
-        });
-      });
+          // Sort candidates by LRU policy: least recently used first (oldest access first)
+          const candidateIds = distantCandidates.map((c) => c.node.id);
+          const orderedEvictionNodeIds = lruCacheRef.current.getLRUOrder(candidateIds);
 
-      // ۲. تخلیه صریح بافرهای صوتی (Audio Buffers) گره‌های با فاصله بیش از ۲ گام:
-      // شناسایی فرکانس‌ها و پروفایل‌های صوتی گره‌های دور که در گره‌های محافظت‌شده استفاده نشده‌اند
-      const evictedTones = Array.from(
-        new Set(
-          distantCandidates
-            .map((c) => c.node.audioProfile.tone)
-            .filter((tone) => !protectedTones.has(tone))
-        )
-      );
+          // 1. Explicit eviction of scene placeholders for nodes beyond 2 steps distance:
+          let purgedPlaceholdersCount = 0;
+          orderedEvictionNodeIds.forEach((nodeId) => {
+            const distantNode = graph.nodes.find((n) => n.id === nodeId);
+            if (!distantNode) return;
 
-      // تخلیه و آزادسازی صریح بافرهای وب‌آودیو از حافظه
-      const audioPurgeResult = audioAmbiance.purgeAudioBuffersForTones(evictedTones);
-      audioAmbiance.pruneNonAdjacentAudio(Array.from(protectedTones));
+            // Main scene loop placeholder
+            if (distantNode.ambientLoop.posterUrl && !protectedPlaceholderUrls.has(distantNode.ambientLoop.posterUrl)) {
+              preloadManager.unloadPlaceholderTexture(distantNode.ambientLoop.posterUrl);
+              purgedPlaceholdersCount++;
+            }
 
-      // ۳. تخلیه هدفمند تکسچرهای پلیس‌هولدر باکیفیت و بافرهای ویدیویی توسط موتور پری‌لود
-      preloadManager.pruneLRUResources(graph, currentIndex, orderedEvictionNodeIds, maxProtectedDistance);
+            // Scene audio eviction if not protected
+            if ((distantNode.ambientLoop as any).audioUrl && !protectedAudioUrls.has((distantNode.ambientLoop as any).audioUrl)) {
+              preloadManager.unloadAudio((distantNode.ambientLoop as any).audioUrl);
+            }
 
-      // ه) پیش‌بارگذاری و کش مستقیم تکسچرهای پلیس‌هولدر در بافر GPU بر اساس جهت اسکرول جاری
-      // (GPU Texture Pre-fetching to prevent frame stutter during navigation)
-      preloadManager
-        .prefetchDirectionalTextures(graph, currentIndex, currentScrollDirectionRef.current)
-        .then((res) => {
-          setGpuTexturesPreloadedCount(res.count);
-        });
+            // Forward and backward transition placeholders
+            distantNode.transitions.forEach((t) => {
+              if (t.video.posterUrl && !protectedPlaceholderUrls.has(t.video.posterUrl)) {
+                preloadManager.unloadPlaceholderTexture(t.video.posterUrl);
+                purgedPlaceholdersCount++;
+              }
+              if (t.reverseVideo?.posterUrl && !protectedPlaceholderUrls.has(t.reverseVideo.posterUrl)) {
+                preloadManager.unloadPlaceholderTexture(t.reverseVideo.posterUrl);
+                purgedPlaceholdersCount++;
+              }
+              // Transition audio eviction if not protected
+              if (t.audioUrl && !protectedAudioUrls.has(t.audioUrl)) {
+                preloadManager.unloadAudio(t.audioUrl);
+              }
+              if (t.reverseAudioUrl && !protectedAudioUrls.has(t.reverseAudioUrl)) {
+                preloadManager.unloadAudio(t.reverseAudioUrl);
+              }
+            });
+          });
 
-      setLruMetrics({
-        evictedNodesCount: orderedEvictionNodeIds.length,
-        protectedNodesCount: protectedNodes.length,
-        lastEvictedTitle: distantCandidates.length > 0 ? distantCandidates[0].node.title : null,
-        purgedPlaceholdersCount,
-        purgedAudioBuffersCount: audioPurgeResult.purgedCount,
-      });
+          // 2. Explicit eviction of audio buffers for nodes beyond 2 steps distance:
+          // Identify audio profiles of distant nodes not used in protected nodes
+          const evictedTones = Array.from(
+            new Set(
+              distantCandidates
+                .map((c) => c.node.audioProfile.tone)
+                .filter((tone) => !protectedTones.has(tone))
+            )
+          );
 
-    }, [currentNode, adjacentNeighbors, graph, currentIndex]);
+          // Explicit eviction and release of Web Audio buffers from memory
+          const audioPurgeResult = audioAmbiance.purgeAudioBuffersForTones(evictedTones);
+          audioAmbiance.pruneNonAdjacentAudio(Array.from(protectedTones));
+
+          // 3. Targeted eviction of high-res placeholder textures and video buffers by preload engine
+          preloadManager.pruneLRUResources(graph, currentIndex, orderedEvictionNodeIds, maxProtectedDistance);
+
+          // 4. Preload and cache placeholder textures directly in GPU buffer based on current scroll direction
+          // (GPU Texture Pre-fetching to prevent frame stutter during navigation)
+          preloadManager
+            .prefetchDirectionalTextures(graph, currentIndex, currentScrollDirectionRef.current)
+            .then((res) => {
+              setGpuTexturesPreloadedCount(res.count);
+            });
+
+          setLruMetrics({
+            evictedNodesCount: orderedEvictionNodeIds.length,
+            protectedNodesCount: protectedNodes.length,
+            lastEvictedTitle: distantCandidates.length > 0 ? distantCandidates[0].node.title : null,
+            purgedPlaceholdersCount,
+            purgedAudioBuffersCount: audioPurgeResult.purgedCount,
+          });
+
+        }, [currentNode, adjacentNeighbors, graph, currentIndex]);
 
     // بررسی مداوم و زنده وضعیت آماده بودن کش منبع ویدیویی باکیفیت (High-Res) سکانس بعدی
     const checkNextSceneCacheStatus = useCallback(() => {

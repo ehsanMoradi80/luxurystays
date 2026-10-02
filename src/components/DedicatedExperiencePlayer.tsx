@@ -11,7 +11,7 @@
  *   - جلوگیری کامل از Memory Leak با مدیریت چرخه حیات ویدیوها و لیسنرها
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ArrowRight, 
@@ -19,9 +19,10 @@ import {
   VolumeX, 
   Sparkles 
 } from 'lucide-react';
-import { DedicatedExperience, DedicatedTransition } from '../types/cms';
+import { DedicatedExperience, DedicatedTransition, DedicatedSequence } from '../types/cms';
 import { formatPersianPrice } from '../utils/jalali';
 import { audioAmbiance } from '../services/AudioAmbienceEngine';
+import { preloadManager } from '../services/PreloadManager';
 
 interface DedicatedExperiencePlayerProps {
   experience: DedicatedExperience;
@@ -39,7 +40,7 @@ export const DedicatedExperiencePlayer: React.FC<DedicatedExperiencePlayerProps>
   const sequences = experience.sequences || [];
   const transitions = experience.transitions || [];
 
-  // سکانس فعال جاری
+  // Active sequence state
   const [currentSeqId, setCurrentSeqId] = useState<string>(() => {
     if (initialSequenceId && sequences.some((s) => s.id === initialSequenceId)) {
       return initialSequenceId;
@@ -47,18 +48,18 @@ export const DedicatedExperiencePlayer: React.FC<DedicatedExperiencePlayerProps>
     return sequences[0]?.id || '';
   });
 
-  // وضعیت ترنزیشن
+  // Transition state
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
   const [activeTransition, setActiveTransition] = useState<DedicatedTransition | null>(null);
 
-  // وضعیت صدا
+  // Audio state
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
 
-  // رفرنس‌های ویدیو جهت جلوگیری از Memory Leak
+  // Video refs for memory leak prevention
   const loopVideoRef = useRef<HTMLVideoElement>(null);
   const transVideoRef = useRef<HTMLVideoElement>(null);
 
-  // مهار اسکرول و ترنزیشن
+  // Scroll and transition throttling
   const lastScrollTimeRef = useRef<number>(0);
   const touchStartYRef = useRef<number | null>(null);
   const activeTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
@@ -66,7 +67,64 @@ export const DedicatedExperiencePlayer: React.FC<DedicatedExperiencePlayerProps>
   const currentSequence = sequences.find((s) => s.id === currentSeqId) || sequences[0];
   const currentIndex = sequences.findIndex((s) => s.id === currentSequence?.id);
 
-  // اجرای ترنزیشن بین سکانس‌ها
+  // Preload adjacent sequences and transitions in background
+  useEffect(() => {
+    if (!currentSequence) return;
+
+    // Preload current sequence video
+    if (currentSequence.videoUrl) {
+      preloadManager.preloadVideo(currentSequence.videoUrl);
+    }
+    
+    // Preload current sequence audio if available
+    if (currentSequence.audioUrl) {
+      preloadManager.preloadAudio(currentSequence.audioUrl);
+    }
+
+    // Preload poster
+    if (currentSequence.posterUrl) {
+      preloadManager.preloadPlaceholderTexture(currentSequence.posterUrl);
+    }
+
+    // Preload adjacent sequences (previous and next)
+    const prevSeq = sequences[currentIndex - 1];
+    const nextSeq = sequences[currentIndex + 1];
+
+    [prevSeq, nextSeq].forEach((seq) => {
+      if (!seq) return;
+      if (seq.videoUrl) {
+        preloadManager.preloadVideo(seq.videoUrl);
+      }
+      if (seq.audioUrl) {
+        preloadManager.preloadAudio(seq.audioUrl);
+      }
+      if (seq.posterUrl) {
+        preloadManager.preloadPlaceholderTexture(seq.posterUrl);
+      }
+    });
+
+    // Preload transitions to/from adjacent sequences
+    const relevantTransitions = transitions.filter((t) => 
+      t.fromSequenceId === currentSeqId || 
+      t.toSequenceId === currentSeqId ||
+      (prevSeq && (t.fromSequenceId === prevSeq.id || t.toSequenceId === prevSeq.id)) ||
+      (nextSeq && (t.fromSequenceId === nextSeq.id || t.toSequenceId === nextSeq.id))
+    );
+
+    relevantTransitions.forEach((trans) => {
+      if (trans.videoUrl) {
+        preloadManager.preloadVideo(trans.videoUrl);
+      }
+      if (trans.audioUrl) {
+        preloadManager.preloadAudio(trans.audioUrl);
+      }
+      if (trans.reverseAudioUrl) {
+        preloadManager.preloadAudio(trans.reverseAudioUrl);
+      }
+    });
+  }, [currentSeqId, sequences, transitions, currentIndex]);
+
+  // Execute transition between sequences
   const transitionToSequence = useCallback((targetSeqId: string) => {
     if (targetSeqId === currentSeqId || isTransitioning) return;
 
@@ -95,7 +153,7 @@ export const DedicatedExperiencePlayer: React.FC<DedicatedExperiencePlayerProps>
     }
   }, [currentSeqId, isTransitioning, transitions]);
 
-  // اتمام ترنزیشن
+  // Handle transition end
   const handleTransitionEnded = useCallback(() => {
     if (activeTransition) {
       setCurrentSeqId(activeTransition.toSequenceId);

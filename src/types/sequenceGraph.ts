@@ -198,6 +198,10 @@ export interface TransitionEdgeData {
   edgeType?: ExperienceEdgeType;
   triggerType: 'click' | 'scroll' | 'hotspot' | 'menu' | 'parallel_auto';
   transitionVideo?: ResponsiveVideoMedia;
+  /** Optional audio file for transition ambiance (plays alongside video) */
+  transitionAudioUrl?: string;
+  /** Reverse transition audio if different from forward */
+  reverseAudioUrl?: string;
   soundCue?: string;
   direction?: 'forward' | 'backward' | 'ascend' | 'descend' | 'lateral';
 }
