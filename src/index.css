@@ -1,13 +1,12 @@
 @import "tailwindcss";
 
 @layer base {
+  *, ::before, ::after {
+    font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
   body {
     font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
-}
-
-.font-serif {
-  font-family: 'Playfair Display', 'Cinzel', serif;
 }
 
 /* Hide scrollbars for slick aesthetic */

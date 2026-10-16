@@ -216,3 +216,67 @@ export interface SequenceGraph {
   nodes: ExperienceNodeData[];
   edges: TransitionEdgeData[];
 }
+
+// =========================================================================
+// انواع سازگاری با کدهای موجود (Legacy & Applet Compatibility Interfaces)
+// =========================================================================
+export interface VideoSource {
+  landscapeUrl: string;
+  portraitUrl?: string;
+  durationSeconds?: number;
+  posterUrl?: string;
+  seamlessLoop?: boolean;
+}
+
+export interface SpatialHotspot {
+  id: string;
+  title: string;
+  description: string;
+  category: 'DINING' | 'SPA' | 'ROOM' | 'ACTIVITY' | 'AMENITY' | string;
+  position: { x: number; y: number }; // 0 to 100 percentage
+  targetNodeId?: string;
+  iconName?: string;
+}
+
+export interface TransitionEdge {
+  id: string;
+  targetNodeId: string;
+  video: VideoSource;
+  label?: string;
+  reverseAllowed?: boolean;
+  reverseVideo?: VideoSource;
+  audioUrl?: string;
+  reverseAudioUrl?: string;
+  soundCue?: string;
+  direction?: 'forward' | 'backward' | 'ascend' | 'descend' | 'lateral';
+  triggerType?: 'click' | 'scroll' | 'hotspot' | 'menu';
+}
+
+export interface SequenceNode {
+  id: string;
+  title: string;
+  persianTitle: string;
+  subtitle: string;
+  description: string;
+  category: string;
+  floorLevel?: string;
+  ambientLoop: VideoSource;
+  transitions: TransitionEdge[];
+  hotspots?: SpatialHotspot[];
+  audioProfile: {
+    tone: string;
+    volume: number;
+    spatialPan?: number;
+  };
+}
+
+export interface HotelExperienceGraph {
+  id?: string;
+  name?: string;
+  hotelName: string;
+  tagline?: string;
+  version?: string;
+  initialNodeId: string;
+  nodes: SequenceNode[];
+}
+

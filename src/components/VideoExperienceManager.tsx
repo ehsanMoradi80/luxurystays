@@ -51,6 +51,7 @@ export interface VideoExperienceManagerProps {
   graph: HotelExperienceGraph;
   currentNodeId: string;
   onNodeChange: (newNodeId: string) => void;
+  onOpenBooking?: () => void;
   onStatusChange?: (
     status: SequencerStatus, 
     progress: number, 
@@ -65,7 +66,12 @@ export interface VideoManagerHandle {
   transitionTo: (targetNodeId: string) => void;
   transitionBackward: () => void;
   scrubToProgress: (progress: number) => void;
+  goToNext?: () => boolean;
+  goToPrev?: () => boolean;
+  jumpToNode?: (targetNodeId: string) => void;
 }
+
+export type VideoExperienceManagerRef = VideoManagerHandle;
 
 const PERSIAN_ORDINALS = [
   'اول',
@@ -167,6 +173,21 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
     const currentScrollDirectionRef = useRef<'forward' | 'backward'>('forward');
     const [scrollDirection, setScrollDirection] = useState<'forward' | 'backward'>('forward');
     const [gpuTexturesPreloadedCount, setGpuTexturesPreloadedCount] = useState<number>(0);
+
+    // ردیابی تعاملی پوینتر ماوس برای پارالاکس و افکت‌های اتمسفریک بلادرنگ
+    const [pointerOffset, setPointerOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+    const [mousePos, setMousePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+    useEffect(() => {
+      const handlePointer = (e: MouseEvent) => {
+        const nx = (e.clientX / (window.innerWidth || 1) - 0.5) * 2;
+        const ny = (e.clientY / (window.innerHeight || 1) - 0.5) * 2;
+        setPointerOffset({ x: nx, y: ny });
+        setMousePos({ x: e.clientX, y: e.clientY });
+      };
+      window.addEventListener('mousemove', handlePointer, { passive: true });
+      return () => window.removeEventListener('mousemove', handlePointer);
+    }, []);
 
     // متغیرهای محاسبه تکانه و شتاب (Momentum & Velocity Tracking for Scrub Timeline)
     const scrubVelocityRef = useRef<number>(0);
@@ -1434,114 +1455,171 @@ export const VideoExperienceManager = React.forwardRef<VideoManagerHandle, Video
         targetProgressRef.current = clamped;
         setTransitionProgress(clamped);
       },
+      goToNext: () => {
+        const res = getForwardTransition();
+        if (res) {
+          (ref as any)?.current?.transitionTo(res.edge.targetNodeId);
+          return true;
+        }
+        return false;
+      },
+      goToPrev: () => {
+        const res = getBackwardTransition();
+        if (res) {
+          (ref as any)?.current?.transitionBackward();
+          return true;
+        }
+        return false;
+      },
+      jumpToNode: (targetId: string) => {
+        (ref as any)?.current?.transitionTo(targetId);
+      },
     }));
 
-    // محاسبه شماره ترنزیشن (ترنزیشن اول، دوم، سوم، چهارم)
+    // محاسبه شماره ترنزیشن
     const transitionOrdinal = PERSIAN_ORDINALS[isReverseTransition ? currentIndex - 1 : currentIndex] || 'اول';
 
+    // گره مقصد در حین ترنزیشن
+    const targetNode = targetNodeIdRef.current
+      ? graph.nodes.find((n) => n.id === targetNodeIdRef.current)
+      : null;
+
+    // محاسبه شفافیت لایه‌ها برای ترکیب پیوسته و روان بدون لودینگ
+    const isTrans = status === 'TRANSITIONING';
+    const targetBlendOpacity = isTrans
+      ? isReverseTransition
+        ? 1 - transitionProgress
+        : transitionProgress
+      : 0;
+    const currentBlendOpacity = isTrans
+      ? isReverseTransition
+        ? transitionProgress
+        : 1 - transitionProgress
+      : 1;
+
     return (
-      <div id="video-experience-sequencer" className="absolute inset-0 w-full h-full overflow-hidden bg-neutral-950 z-0">
+      <div id="video-experience-sequencer" className="absolute inset-0 w-full h-full overflow-hidden bg-neutral-950 z-0 select-none">
         {/* =========================================================================
-            پخش‌کننده ویدیوهای لوپ سینمایی و ترنزیشن‌های حرکتی بین سکانس‌ها
+            ۱. لایه سکانس مبدأ (Current Sequence Media Layer)
+            پشتیبانی از ویدیو، عکس، و ترکیب دو لایه همزمان با پارالاکس پویا متناسب با پوینتر ماوس
             ========================================================================= */}
-        {currentNode.ambientLoop.landscapeUrl && (
-          <video
-            ref={ambientVideoRef}
-            key={`ambient-${currentNode.id}`}
-            src={currentNode.ambientLoop.landscapeUrl}
-            poster={currentNode.ambientLoop.posterUrl}
-            autoPlay
-            loop
-            muted
-            playsInline
-            onWaiting={() => setIsAmbientVideoBuffering(true)}
-            onPlaying={() => setIsAmbientVideoBuffering(false)}
-            onLoadedData={() => setIsAmbientVideoBuffering(false)}
-            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ease-in-out pointer-events-none"
-            style={{ opacity: status === 'TRANSITIONING' ? 0.35 : 0.88 }}
-          />
-        )}
-
-        {/* ویدیوی ترنزیشن پویا در حین جابجایی بین سکانس‌ها */}
-        {status === 'TRANSITIONING' && activeTransitionEdge?.video?.landscapeUrl && (
-          <video
-            ref={transitionVideoRef}
-            key={`trans-${activeTransitionEdge.targetNodeId}`}
-            src={activeTransitionEdge.video.landscapeUrl}
-            poster={activeTransitionEdge.video.posterUrl || currentNode.ambientLoop.posterUrl}
-            autoPlay
-            muted
-            playsInline
-            onLoadStart={() => setIsTransitionVideoBuffering(true)}
-            onWaiting={() => setIsTransitionVideoBuffering(true)}
-            onPlaying={() => setIsTransitionVideoBuffering(false)}
-            onLoadedData={() => setIsTransitionVideoBuffering(false)}
-            onCanPlay={() => setIsTransitionVideoBuffering(false)}
-            className="absolute inset-0 w-full h-full object-cover z-10 pointer-events-none transition-opacity duration-300"
-            style={{ opacity: 0.95 }}
-          />
-        )}
-
-        {/* =========================================================================
-            اسکلت شیمر و اسپینر فوق‌لوکس هنگام لودینگ و ترنزیشن‌های شبکه
-            جلوگیری کامل از فریم‌های سیاه و افزایش چشمگیر حس سرعت و روانی بصری
-            ========================================================================= */}
-        {status === 'TRANSITIONING' && isTransitionVideoBuffering && (
-          <div 
-            id="luxury-transition-skeleton"
-            className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center transition-opacity duration-300 ease-out"
-          >
-            {/* پرده اسکلتون تاریک با گرادیان طلایی نوری و افکت بلور اشرافی */}
-            <div className="absolute inset-0 bg-neutral-950/75 backdrop-blur-md" />
-
-            {/* موج نوری شیمر طلایی متالیک که روی فضا حرکت می‌کند */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/10 to-transparent animate-pulse" />
-
-            {/* اسپینر و نشانگر لودینگ مینیمال اشرافی در مرکز */}
-            <div className="relative z-10 flex items-center gap-3.5 px-6 py-3.5 rounded-2xl bg-black/70 border border-white/10 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.85)]">
-              {/* حلقه دوار دوگانه طلایی با نگین کهربایی */}
-              <div className="relative w-8 h-8 flex items-center justify-center shrink-0">
-                <div className="absolute inset-0 rounded-full border border-amber-400/20" />
-                <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-amber-400 border-r-amber-300/60 animate-spin" />
-                <div className="w-2 h-2 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 shadow-[0_0_10px_rgba(251,191,36,0.9)] animate-pulse" />
-              </div>
-
-              {/* عنوان فاخر و نامحسوس */}
-              <div className="flex flex-col text-right">
-                <span className="text-xs font-medium text-amber-200/90 drop-shadow">
-                  آماده‌سازی فریم‌های سینمایی...
-                </span>
-                <span className="text-[10px] text-neutral-400">
-                  {targetNodeTitle ? `انتقال به ${targetNodeTitle}` : 'در حال بارگذاری'}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* تکسچر بافرشده و گرادیان‌های لوکس جهت خوانایی متون */}
         <div 
-          id="scene-placeholder-canvas"
-          className="absolute inset-0 w-full h-full flex flex-col items-center justify-center select-none pointer-events-none"
+          className="absolute inset-0 w-full h-full transition-opacity duration-300 ease-out pointer-events-none"
+          style={{
+            opacity: currentBlendOpacity,
+            transform: `translate3d(${pointerOffset.x * 14}px, ${pointerOffset.y * 10}px, 0) scale(1.05)`,
+            transition: 'transform 0.15s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.25s ease-out',
+          }}
         >
-          {/* پس‌زمینه با نورپردازی مخملین و متالیک هتل */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-neutral-900/40 via-neutral-950/60 to-black/90 pointer-events-none" />
+          {/* ویدیو یا عکس اصلی سکانس جاری */}
+          {currentNode.ambientLoop.landscapeUrl ? (
+            <video
+              ref={ambientVideoRef}
+              key={`ambient-${currentNode.id}`}
+              src={currentNode.ambientLoop.landscapeUrl}
+              poster={currentNode.ambientLoop.posterUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          ) : currentNode.ambientLoop.posterUrl ? (
+            <img
+              src={currentNode.ambientLoop.posterUrl}
+              alt={currentNode.title}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          ) : null}
 
-          {/* خطوط نوری متالیک در پایین */}
-          <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black via-black/50 to-transparent pointer-events-none" />
+          {/* لایه دوم پوششی (Overlay Texture / Dual Layer) با جابجایی معکوس جهت عمق سه‌بعدی */}
+          {currentNode.ambientLoop.posterUrl && currentNode.ambientLoop.landscapeUrl && (
+            <div
+              className="absolute inset-0 w-full h-full object-cover opacity-20 mix-blend-overlay pointer-events-none"
+              style={{
+                backgroundImage: `url(${currentNode.ambientLoop.posterUrl})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                transform: `translate3d(${pointerOffset.x * -18}px, ${pointerOffset.y * -14}px, 0) scale(1.08)`,
+                transition: 'transform 0.15s cubic-bezier(0.2, 0, 0.2, 1)',
+              }}
+            />
+          )}
         </div>
 
         {/* =========================================================================
-            نشانگر نوری ترنزیشن: کاملاً سینمایی و بدون هرگونه متن، بج یا توضیحات اضافی
-            در حرکت رو به جلو پر می‌شود و هنگام دنده عقب به سمت سکانس قبلی به نرمی خالی می‌شود
+            ۲. لایه سکانس مقصد در حین ترنزیشن (Target Sequence Layer - Seamless Blend)
+            رندر همزمان و ترکیب بلادرنگ با اسکرابینگ بدون هیچ صفحه سیاه یا پیام لودینگ
             ========================================================================= */}
-        {status === 'TRANSITIONING' && (
+        {isTrans && targetNode && (
+          <div 
+            className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-200 ease-out z-10"
+            style={{
+              opacity: targetBlendOpacity,
+              transform: `translate3d(${pointerOffset.x * 10}px, ${pointerOffset.y * 8}px, 0) scale(${1.03 + (1 - targetBlendOpacity) * 0.04})`,
+              transition: 'transform 0.15s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.2s ease-out',
+            }}
+          >
+            {targetNode.ambientLoop.landscapeUrl ? (
+              <video
+                key={`target-ambient-${targetNode.id}`}
+                src={targetNode.ambientLoop.landscapeUrl}
+                poster={targetNode.ambientLoop.posterUrl}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            ) : targetNode.ambientLoop.posterUrl ? (
+              <img
+                src={targetNode.ambientLoop.posterUrl}
+                alt={targetNode.title}
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            ) : null}
+
+            {/* لایه ویدیوی ترنزیشن اختصاصی (در صورت تعریف شدن) */}
+            {activeTransitionEdge?.video?.landscapeUrl && (
+              <video
+                ref={transitionVideoRef}
+                key={`trans-video-${activeTransitionEdge.targetNodeId}`}
+                src={activeTransitionEdge.video.landscapeUrl}
+                autoPlay
+                muted
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover mix-blend-screen opacity-70 pointer-events-none"
+              />
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            ۳. افکت تعاملی اتمسفر و هاله نوری دنبال‌کننده پوینتر ماوس (Interactive Atmospheric Glow)
+            ========================================================================= */}
+        <div 
+          className="absolute inset-0 pointer-events-none z-15"
+          style={{
+            background: mousePos.x 
+              ? `radial-gradient(850px circle at ${mousePos.x}px ${mousePos.y}px, rgba(251, 191, 36, 0.07), transparent 70%)` 
+              : 'radial-gradient(ellipse at center, rgba(251, 191, 36, 0.04), transparent 60%)',
+          }}
+        />
+
+        {/* سایه گرادیان تیره پایین برای کنتراست سینمایی متن */}
+        <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/30 to-neutral-950/20 pointer-events-none z-15" />
+
+        {/* =========================================================================
+            ۴. نشانگر نوری حداقلی ترنزیشن در بالای صفحه (Ultra-Minimal Hairline Indicator)
+            فقط یک خط باریک لوکس برای حس اسکرابینگ، بدون هرگونه متن یا لودر
+            ========================================================================= */}
+        {isTrans && (
           <div 
             id="transition-minimal-indicator"
             className="fixed top-0 left-0 right-0 z-30 pointer-events-none"
           >
             <div 
-              className="h-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 shadow-[0_0_12px_rgba(251,191,36,0.8)] transition-all duration-75"
+              className="h-0.5 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 shadow-[0_0_10px_rgba(251,191,36,0.9)] transition-all duration-75"
               style={{
                 width: `${
                   isReverseTransition

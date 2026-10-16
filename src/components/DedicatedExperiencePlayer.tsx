@@ -62,7 +62,7 @@ export const DedicatedExperiencePlayer: React.FC<DedicatedExperiencePlayerProps>
   // Scroll and transition throttling
   const lastScrollTimeRef = useRef<number>(0);
   const touchStartYRef = useRef<number | null>(null);
-  const activeTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
+  const activeTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const currentSequence = sequences.find((s) => s.id === currentSeqId) || sequences[0];
   const currentIndex = sequences.findIndex((s) => s.id === currentSequence?.id);
@@ -170,7 +170,7 @@ export const DedicatedExperiencePlayer: React.FC<DedicatedExperiencePlayerProps>
   // کنترل جابجایی با اسکرول (Wheel / Trackpad)
   useEffect(() => {
     let accumulatedDelta = 0;
-    let resetTimer: NodeJS.Timeout;
+    let resetTimer: ReturnType<typeof setTimeout>;
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();

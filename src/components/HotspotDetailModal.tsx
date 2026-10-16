@@ -43,12 +43,6 @@ export const HotspotDetailModal: React.FC<HotspotDetailModalProps> = ({
           <X className="w-4 h-4" />
         </button>
 
-        {/* Category Badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs font-semibold mb-4">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>بخش اختصاصی {hotspot.category}</span>
-        </div>
-
         {/* Title */}
         <h2 className="text-2xl font-black text-white mb-3 tracking-tight">
           {hotspot.title}

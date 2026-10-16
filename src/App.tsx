@@ -19,19 +19,19 @@ export function App() {
 
   const videoExperienceRef = useRef<VideoExperienceManagerRef | null>(null);
 
-  const currentIndex = graph.nodes.findIndex((n) => n.id === currentNodeId);
-  const currentNode: SequenceNode = graph.nodes[currentIndex] || graph.nodes[0];
+  const currentIndex = graph.nodes.findIndex((n: any) => n.id === currentNodeId);
+  const currentNode: SequenceNode = (graph.nodes[currentIndex] as SequenceNode) || (graph.nodes[0] as SequenceNode);
 
   const handleNextScene = useCallback(() => {
-    videoExperienceRef.current?.goToNext();
+    videoExperienceRef.current?.goToNext?.();
   }, []);
 
   const handlePrevScene = useCallback(() => {
-    videoExperienceRef.current?.goToPrev();
+    videoExperienceRef.current?.goToPrev?.();
   }, []);
 
   const handleJumpToScene = useCallback((nodeId: string) => {
-    videoExperienceRef.current?.jumpToNode(nodeId);
+    videoExperienceRef.current?.jumpToNode?.(nodeId);
   }, []);
 
   const handleToggleMute = useCallback(() => {
@@ -75,6 +75,7 @@ export function App() {
       <AdminDashboard
         graph={graph}
         onBackToExperience={() => setActiveView('EXPERIENCE')}
+        onLaunchJourney={() => setActiveView('EXPERIENCE')}
       />
     );
   }
@@ -106,7 +107,7 @@ export function App() {
       {/* Video Sequencer Engine */}
       <VideoExperienceManager
         ref={videoExperienceRef}
-        graph={graph}
+        graph={graph as any}
         currentNodeId={currentNodeId}
         onNodeChange={setCurrentNodeId}
         onOpenBooking={() => setActiveView('BOOKING')}
@@ -124,16 +125,11 @@ export function App() {
         enableScrollScrubbing={true}
       />
 
-      {/* Cinematic Space Information & Controls */}
+      {/* Cinematic Space Information Overlay */}
       <SpaceInfoOverlay
         currentNode={currentNode}
         isTransitioning={isTransitioning}
         onOpenBooking={() => setActiveView('BOOKING')}
-        currentIndex={currentIndex !== -1 ? currentIndex : 0}
-        totalScenes={graph.nodes.length}
-        onSelectScene={handleJumpToScene}
-        onNextScene={handleNextScene}
-        onPrevScene={handlePrevScene}
       />
 
       {/* Main Site Header & Timeline Navigation */}

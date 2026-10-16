@@ -1,17 +1,38 @@
 import React, { useState } from 'react';
-import { ArrowRight, Shield, Layers, Video, Sliders, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Shield, Layers, Video, Sliders, CheckCircle2, Workflow } from 'lucide-react';
 import { HotelExperienceGraph } from '../../types/sequenceGraph';
+import { StudioCanvas } from '../../studio/StudioCanvas';
 
 interface AdminDashboardProps {
   graph: HotelExperienceGraph;
   onBackToExperience: () => void;
+  onLaunchJourney?: (customGraph?: any) => void;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ graph, onBackToExperience }) => {
-  const [activeTab, setActiveTab] = useState<'SEQUENCES' | 'SETTINGS'>('SEQUENCES');
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  graph,
+  onBackToExperience,
+  onLaunchJourney,
+}) => {
+  const [activeTab, setActiveTab] = useState<'VISUAL_BUILDER' | 'SEQUENCES'>('VISUAL_BUILDER');
+
+  if (activeTab === 'VISUAL_BUILDER') {
+    return (
+      <StudioCanvas
+        onExitStudio={onBackToExperience}
+        onLaunchJourney={(g) => {
+          if (onLaunchJourney) {
+            onLaunchJourney(g);
+          } else {
+            onBackToExperience();
+          }
+        }}
+      />
+    );
+  }
 
   return (
-    <div className="w-full min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-900 via-neutral-950 to-black text-neutral-100 font-sans flex flex-col relative selection:bg-amber-400 selection:text-neutral-950 pb-20">
+    <div className="w-full min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-900 via-neutral-950 to-black text-neutral-100 font-['Vazirmatn'] flex flex-col relative selection:bg-amber-400 selection:text-neutral-950 pb-20">
       {/* Header */}
       <header className="sticky top-0 z-40 px-4 sm:px-8 py-3.5 bg-neutral-950/80 backdrop-blur-2xl border-b border-white/10 flex items-center justify-between gap-4 shadow-2xl">
         <div className="flex items-center gap-3">
@@ -21,20 +42,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ graph, onBackToE
             title="بازگشت به گشت سینمایی (Esc)"
           >
             <ArrowRight className="w-4 h-4 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
-            <span className="font-medium">بازگشت به سایت (Esc)</span>
+            <span className="font-medium">بازگشت به سایت</span>
           </button>
 
           <div className="flex items-center gap-2 border-r border-white/10 pr-3 text-xs">
             <Shield className="w-4 h-4 text-amber-400" />
-            <span className="font-serif text-amber-300 font-medium">پنل مدیریت محتوا و گراف تجارب قصر لورا</span>
+            <span className="text-amber-300 font-medium">پنل مدیریت محتوا و گراف تجارب</span>
           </div>
         </div>
 
         <button
-          onClick={onBackToExperience}
-          className="px-3 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white text-xs border border-white/10"
+          onClick={() => setActiveTab('VISUAL_BUILDER')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400 text-neutral-950 text-xs font-bold hover:bg-amber-300 transition-all cursor-pointer"
         >
-          خروج (Esc)
+          <Workflow className="w-4 h-4" />
+          <span>کانواس نود-بیس Visual Builder</span>
         </button>
       </header>
 
@@ -47,26 +69,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ graph, onBackToE
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setActiveTab('SEQUENCES')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                activeTab === 'SEQUENCES' ? 'bg-amber-400 text-neutral-950 font-bold' : 'bg-white/5 text-neutral-400'
-              }`}
+              onClick={() => setActiveTab('VISUAL_BUILDER')}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-400/20 text-amber-300 border border-amber-400/30 flex items-center gap-1.5 cursor-pointer hover:bg-amber-400 hover:text-neutral-950 transition-all"
             >
-              سکانس‌ها ({graph.nodes.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('SETTINGS')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                activeTab === 'SETTINGS' ? 'bg-amber-400 text-neutral-950 font-bold' : 'bg-white/5 text-neutral-400'
-              }`}
-            >
-              تنظیمات عمومی
+              <Workflow className="w-3.5 h-3.5" />
+              <span>ویرایشگر گراف سه‌بعدی</span>
             </button>
           </div>
         </div>
 
         <div className="space-y-4">
-          {graph.nodes.map((node, i) => (
+          {graph.nodes.map((node: any, i: number) => (
             <div key={node.id} className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="w-8 h-8 rounded-lg bg-amber-400/10 border border-amber-400/20 text-amber-300 flex items-center justify-center text-xs font-bold font-mono">
@@ -74,17 +87,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ graph, onBackToE
                 </span>
                 <div>
                   <div className="text-sm font-bold text-white">{node.persianTitle}</div>
-                  <div className="text-xs text-neutral-400 font-serif">{node.title} &bull; {node.category}</div>
+                  <div className="text-xs text-neutral-400 font-light">{node.title} &bull; {node.category}</div>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 text-xs">
                 <span className="px-2 py-0.5 rounded bg-neutral-800 text-neutral-300 font-mono text-[11px]">
-                  صدا: {node.audioProfile.tone} ({Math.round(node.audioProfile.volume * 100)}%)
+                  صدا: {node.audioProfile?.tone || 'پیش‌فرض'}
                 </span>
                 <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" />
-                  فعال
+                  آماده اجرا
                 </span>
               </div>
             </div>

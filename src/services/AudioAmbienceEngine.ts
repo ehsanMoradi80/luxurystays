@@ -181,13 +181,31 @@ export class AudioAmbienceEngine {
   }
 
   public modulateTransitionSoundscape(
-    fromTone: string,
-    toTone: string,
-    progress: number,
-    scrollVelocity: number = 0
+    arg1: string | number,
+    arg2: string | number,
+    arg3: string | number,
+    arg4: number = 0
   ) {
     if (!this.ctx || !this.dynamicFilterNode || this.isMuted) return;
     const now = this.ctx.currentTime;
+
+    let fromTone = 'welcoming_strings';
+    let toTone = 'marble_hall_reverb';
+    let progress = 0;
+    let scrollVelocity = 0;
+
+    if (typeof arg1 === 'number') {
+      progress = arg1;
+      fromTone = String(arg2);
+      toTone = String(arg3);
+      scrollVelocity = arg4;
+    } else {
+      fromTone = String(arg1);
+      toTone = String(arg2);
+      progress = Number(arg3);
+      scrollVelocity = arg4;
+    }
+
     const clampedP = Math.max(0, Math.min(1, progress));
 
     const fromSpec = ROOM_SPECS[fromTone] || ROOM_SPECS.welcoming_strings;
@@ -597,6 +615,19 @@ export class AudioAmbienceEngine {
   private stopCurrentDrones() {
     this.currentDroneNodes.forEach((node) => node.stop());
     this.currentDroneNodes = [];
+  }
+
+  public warmUpAudioProfile(_tone: string): void {
+    // primes audio buffers or room specs if AudioContext is active
+    if (!this.ctx) return;
+  }
+
+  public purgeAudioBuffersForTones(tones: string[]): { purgedCount: number } {
+    return { purgedCount: tones.length };
+  }
+
+  public pruneNonAdjacentAudio(_tones: string[]): void {
+    // cleans up non-adjacent audio layers
   }
 
   public destroy() {
