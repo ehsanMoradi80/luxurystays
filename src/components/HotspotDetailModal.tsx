@@ -1,81 +1,97 @@
-/**
- * HotspotDetailModal.tsx
- * 
- * پنجره اختصاصی معرفی جزئیات شاهکارهای معماری و امکانات هتل قصر لورا
- */
-
-import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Hotspot } from '../types/cms';
-import { X, Sparkles } from 'lucide-react';
-import { autoPersianText, toPersianDigits } from '../utils/JalaliDate';
+import React, { useEffect } from 'react';
+import { X, Sparkles, Calendar, ChevronLeft } from 'lucide-react';
+import { SpatialHotspot } from '../types/sequenceGraph';
 
 interface HotspotDetailModalProps {
-  hotspot: Hotspot | null;
+  hotspot: SpatialHotspot | null;
   onClose: () => void;
+  onBookExperience: () => void;
 }
 
 export const HotspotDetailModal: React.FC<HotspotDetailModalProps> = ({
   hotspot,
   onClose,
+  onBookExperience,
 }) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  if (!hotspot) return null;
+
   return (
-    <AnimatePresence>
-      {hotspot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md text-right font-sans">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="bg-neutral-900 border border-amber-400/40 rounded-2xl p-6 sm:p-7 max-w-md w-full shadow-2xl relative text-neutral-200"
-          >
-            <button
-              onClick={onClose}
-              className="absolute top-4 left-4 text-neutral-400 hover:text-white p-1.5 rounded-full bg-neutral-800/80 cursor-pointer transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in select-none">
+      <div
+        className="relative w-full max-w-lg rounded-3xl bg-neutral-900/95 border border-amber-400/40 p-6 sm:p-8 shadow-2xl text-right overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Glow Accent */}
+        <div className="absolute top-0 right-1/4 w-48 h-48 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 mb-2">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>شاهکار معماری و امکانات قصر</span>
-              {hotspot.action.details?.badge && (
-                <span className="px-2 py-0.5 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-[10px]">
-                  {autoPersianText(hotspot.action.details.badge)}
-                </span>
-              )}
-            </div>
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-5 left-5 w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:border-amber-400/50 text-neutral-400 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+          title="بستن (Esc)"
+        >
+          <X className="w-4 h-4" />
+        </button>
 
-            <h3 className="font-serif text-xl sm:text-2xl text-neutral-100 font-bold mb-1">
-              {autoPersianText(hotspot.title)}
-            </h3>
-            <p className="text-xs text-amber-300/90 mb-3">
-              {autoPersianText(hotspot.tagline)}
-            </p>
-            <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed mb-5">
-              {autoPersianText(hotspot.description)}
-            </p>
-
-            {hotspot.action.details?.specs && (
-              <div className="space-y-2 mb-6 border-t border-neutral-800 pt-3">
-                {hotspot.action.details.specs.map((spec, i) => (
-                  <div key={i} className="flex justify-between items-center text-xs">
-                    <span className="text-neutral-400">{autoPersianText(spec.label)}</span>
-                    <span className="text-amber-200 font-medium">{toPersianDigits(spec.value)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <button
-              onClick={onClose}
-              className="w-full py-2.5 rounded-xl bg-gradient-to-l from-amber-500 via-amber-400 to-amber-300 text-neutral-950 font-bold text-xs tracking-wide transition-all hover:shadow-[0_0_20px_rgba(212,175,55,0.4)] cursor-pointer"
-            >
-              ادامه گشت‌وگذار در قصر
-            </button>
-          </motion.div>
+        {/* Category Badge */}
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs font-semibold mb-4">
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>بخش اختصاصی {hotspot.category}</span>
         </div>
-      )}
-    </AnimatePresence>
+
+        {/* Title */}
+        <h2 className="text-2xl font-black text-white mb-3 tracking-tight">
+          {hotspot.title}
+        </h2>
+
+        {/* Description */}
+        <p className="text-sm text-neutral-300/90 leading-relaxed font-light mb-6">
+          {hotspot.description}
+        </p>
+
+        {/* Features / Highlights */}
+        <div className="grid grid-cols-2 gap-3 mb-6 p-4 rounded-2xl bg-black/40 border border-white/5">
+          <div>
+            <span className="text-[11px] text-neutral-500 block mb-1">دسترسی تشریفاتی</span>
+            <span className="text-xs font-bold text-amber-300">مختص مهمانان VIP هتل</span>
+          </div>
+          <div>
+            <span className="text-[11px] text-neutral-500 block mb-1">خدمات اختصاصی</span>
+            <span className="text-xs font-bold text-amber-300">سرویس ۲۴ ساعته کانسیرژ</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <button
+            onClick={() => {
+              onClose();
+              onBookExperience();
+            }}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-sm shadow-xl shadow-amber-400/20 transition-all cursor-pointer active:scale-95"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>رزرو و هماهنگی این فضا</span>
+          </button>
+
+          <button
+            onClick={onClose}
+            className="px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 text-xs font-medium transition-all cursor-pointer"
+          >
+            بستن (Esc)
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };

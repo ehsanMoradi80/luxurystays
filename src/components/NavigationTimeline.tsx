@@ -1,30 +1,17 @@
-/**
- * NavigationTimeline.tsx
- * 
- * هدر و HUD اشرافی، مینیمال و هماهنگ با درخواست:
- * - هدر بالای صفحه شامل نام هتل، نشان، و دکمه قطع/وصل صدا
- * - نوار پیشرفت موقت سکانس‌ها زیر هدر (به جای پایین صفحه):
- *   نمایش نوار پیشرفت مرحله‌ای و افقی سکانس جاری بر اساس ترتیب گراف (مثلاً سکانس ۱ از ۵)
- * - نوار پیشرفت ترنزیشن تعاملی هنگام اسکرابینگ، زیر هدر
- */
-
 import React from 'react';
-import { Volume2, VolumeX, SlidersHorizontal, Map } from 'lucide-react';
-import { SpaceNode } from '../types/cms';
-import { useThemeAndSiteStore } from '../store/useThemeAndSiteStore';
+import { Volume2, VolumeX, MapPin, Calendar, Shield, Sparkles, Compass } from 'lucide-react';
+import { SequenceNode } from '../types/sequenceGraph';
 
 interface NavigationTimelineProps {
-  isAudioMuted: boolean;
-  onToggleAudio: () => void;
-  isAdmin?: boolean;
-  onOpenFlowCanvas?: () => void;
-  onOpenAdmin?: () => void;
+  nodes: SequenceNode[];
+  currentNodeId: string;
+  onSelectNode: (nodeId: string) => void;
+  onOpenBooking: () => void;
   onOpenMap?: () => void;
-  currentIndex: number;
-  totalScenes: number;
-  currentNode: SpaceNode;
+  onOpenAdmin?: () => void;
+  isMuted: boolean;
+  onToggleMute: () => void;
   isTransitioning?: boolean;
-  transitionProgress?: number;
   transitionSourceTitle?: string;
   transitionTargetTitle?: string;
   isReverseTransition?: boolean;
@@ -32,144 +19,106 @@ interface NavigationTimelineProps {
 }
 
 export const NavigationTimeline: React.FC<NavigationTimelineProps> = ({
-  isAudioMuted,
-  onToggleAudio,
-  isAdmin = false,
-  onOpenFlowCanvas,
-  onOpenAdmin,
+  nodes,
+  currentNodeId,
+  onSelectNode,
+  onOpenBooking,
   onOpenMap,
-  currentIndex,
-  totalScenes,
+  onOpenAdmin,
+  isMuted,
+  onToggleMute,
   isTransitioning = false,
-  transitionProgress = 0,
-  isReverseTransition = false,
-  isBookingOpen = false,
+  transitionTargetTitle,
 }) => {
-  const { sites, activeSiteId } = useThemeAndSiteStore();
-  const currentSite = sites[activeSiteId];
-
   return (
-    <div id="navigation-hud-layer" className="absolute top-0 left-0 right-0 pointer-events-none z-40 flex flex-col p-4 sm:p-6 md:p-8">
-      {/* =========================================================================
-          هدر بالای صفحه: لوکس، خلوت و رسمی
-          ========================================================================= */}
-      <header className="flex items-center justify-between pointer-events-auto w-full">
-        {/* نشان و نام هتل */}
-        <div className="flex items-center gap-3 select-none">
-          <div className="w-9 h-9 rounded-full border border-amber-400/50 bg-black/60 backdrop-blur-xl flex items-center justify-center shadow-[0_0_15px_rgba(251,191,36,0.2)]">
-            <span className="font-serif text-amber-300 font-bold text-sm tracking-wider">ق</span>
-          </div>
-          <div>
-            <span className="font-serif text-sm sm:text-base tracking-[0.2em] text-white font-semibold drop-shadow-md block">
-              {currentSite?.name || 'قصر لورا'}
-            </span>
-            <span className="text-[9px] text-amber-300/80 tracking-widest uppercase font-light block">
-              {currentSite?.location || 'Hotel & Sanctuary'}
-            </span>
-          </div>
+    <header className="fixed top-0 inset-x-0 z-40 px-4 sm:px-8 py-3.5 flex items-center justify-between pointer-events-none select-none">
+      {/* Brand & Emblem */}
+      <div className="flex items-center gap-3.5 pointer-events-auto">
+        <div className="w-10 h-10 rounded-2xl bg-amber-400/10 border border-amber-400/30 backdrop-blur-xl flex items-center justify-center shadow-lg shadow-amber-400/5">
+          <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
         </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-serif text-lg font-bold tracking-wider text-amber-200">LAURA PALACE</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 font-semibold uppercase tracking-widest border border-amber-400/30">
+              5-STAR LUXURY
+            </span>
+          </div>
+          <span className="text-xs text-neutral-400 block font-light">هتل بین‌المللی و قصر باشکوه لورا</span>
+        </div>
+      </div>
 
-        {/* دکمه‌های کنترل */}
-        <div className="flex items-center gap-2.5">
+      {/* Middle Sequence Timeline Breadcrumbs */}
+      <nav className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-950/70 border border-white/10 backdrop-blur-2xl pointer-events-auto shadow-2xl">
+        {nodes.map((node, index) => {
+          const isActive = node.id === currentNodeId;
+          return (
+            <button
+              key={node.id}
+              onClick={() => onSelectNode(node.id)}
+              className={`group flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-300 cursor-pointer ${
+                isActive
+                  ? 'bg-amber-400 text-neutral-950 shadow-md shadow-amber-400/20 font-bold scale-105'
+                  : 'text-neutral-400 hover:text-amber-200 hover:bg-white/5'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-neutral-950' : 'bg-neutral-500 group-hover:bg-amber-400'}`} />
+              <span>{node.persianTitle}</span>
+              <span className={`text-[10px] opacity-60 ${isActive ? 'text-neutral-950' : 'text-neutral-500'}`}>0{index + 1}</span>
+            </button>
+          );
+        })}
+
+        {isTransitioning && transitionTargetTitle && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] text-amber-300 animate-pulse">
+            <Compass className="w-3.5 h-3.5 animate-spin" />
+            <span>در حال انتقال به {transitionTargetTitle}...</span>
+          </div>
+        )}
+      </nav>
+
+      {/* Right Controls: Booking, Map, Sound, Admin */}
+      <div className="flex items-center gap-2 pointer-events-auto">
+        {/* Map Button */}
+        {onOpenMap && (
           <button
-            id="btn-toggle-audio"
-            onClick={onToggleAudio}
-            className="w-9 h-9 rounded-full bg-black/50 border border-white/20 hover:border-amber-400/80 text-white hover:text-amber-300 backdrop-blur-xl flex items-center justify-center transition-all duration-300 cursor-pointer shadow-lg active:scale-95"
-            title={isAudioMuted ? 'پخش نوای آرامش‌بخش' : 'قطع صدا'}
+            onClick={onOpenMap}
+            title="نقشه سه‌بعدی و فضاهای هتل"
+            className="w-10 h-10 rounded-xl bg-neutral-900/80 border border-white/10 hover:border-amber-400/40 text-neutral-300 hover:text-amber-300 backdrop-blur-xl flex items-center justify-center transition-all cursor-pointer shadow-lg active:scale-95"
           >
-            {isAudioMuted ? (
-              <VolumeX className="w-4 h-4 text-neutral-400" />
-            ) : (
-              <Volume2 className="w-4 h-4 text-amber-400 animate-pulse" />
-            )}
+            <MapPin className="w-4 h-4" />
           </button>
+        )}
 
-          {/* دکمه نقشه هتل (جایگزین دکمه تنظیمات طبق درخواست) */}
-          {onOpenMap && (
-            <button
-              id="btn-open-hotel-map"
-              onClick={onOpenMap}
-              className="px-3.5 py-1.5 rounded-full bg-black/60 border border-amber-400/60 hover:border-amber-400 text-amber-300 text-xs flex items-center gap-1.5 cursor-pointer backdrop-blur-xl hover:bg-amber-400/20 transition-all shadow-lg active:scale-95"
-              title="مشاهده نقشه و پلان فضایی هتل"
-            >
-              <Map className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-[11px] font-semibold">نقشه هتل</span>
-            </button>
-          )}
+        {/* Audio Mute/Unmute */}
+        <button
+          onClick={onToggleMute}
+          title={isMuted ? 'فعال‌سازی موسیقی و صدای محیطی' : 'قطع صدای محیط'}
+          className="w-10 h-10 rounded-xl bg-neutral-900/80 border border-white/10 hover:border-amber-400/40 text-neutral-300 hover:text-amber-300 backdrop-blur-xl flex items-center justify-center transition-all cursor-pointer shadow-lg active:scale-95"
+        >
+          {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-amber-400" />}
+        </button>
 
-          {isAdmin && onOpenFlowCanvas && (
-            <button
-              id="btn-open-admin-panel"
-              onClick={onOpenFlowCanvas}
-              className="px-3 py-1.5 rounded-full bg-black/60 border border-amber-400/40 text-amber-300 text-xs flex items-center gap-1.5 cursor-pointer backdrop-blur-xl hover:bg-amber-400/20 transition-all"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span className="text-[11px]">گراف</span>
-            </button>
-          )}
-        </div>
-      </header>
+        {/* Admin Dashboard */}
+        {onOpenAdmin && (
+          <button
+            onClick={onOpenAdmin}
+            title="پنل مدیریت هتل"
+            className="hidden sm:flex w-10 h-10 rounded-xl bg-neutral-900/80 border border-white/10 hover:border-amber-400/40 text-neutral-400 hover:text-amber-300 backdrop-blur-xl items-center justify-center transition-all cursor-pointer shadow-lg active:scale-95"
+          >
+            <Shield className="w-4 h-4" />
+          </button>
+        )}
 
-      {/* =========================================================================
-          نوار پروگرس سکانس‌ها: در زمان رزرواسیون پنهان شده تا ویزارد مستقیماً زیر هدر داک شود
-          ========================================================================= */}
-      {!isBookingOpen && (
-        <div className="w-full max-w-3xl mx-auto mt-2 pointer-events-none">
-          <div className="grid grid-cols-5 gap-1.5 sm:gap-2 w-full">
-            {Array.from({ length: totalScenes }).map((_, idx) => {
-              let widthPercent = 0;
-              let barStyle = 'bg-white/20';
-
-              if (isTransitioning) {
-                if (isReverseTransition) {
-                  if (idx < currentIndex) {
-                    widthPercent = 100;
-                    barStyle = idx === currentIndex - 1 ? 'bg-amber-400' : 'bg-neutral-400/80';
-                  } else if (idx === currentIndex) {
-                    widthPercent = Math.max(0, Math.min(100, Math.round((1 - transitionProgress) * 100)));
-                    barStyle = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]';
-                  } else {
-                    widthPercent = 0;
-                  }
-                } else {
-                  if (idx <= currentIndex) {
-                    widthPercent = 100;
-                    barStyle = idx === currentIndex ? 'bg-amber-400' : 'bg-neutral-400/80';
-                  } else if (idx === currentIndex + 1) {
-                    widthPercent = Math.max(0, Math.min(100, Math.round(transitionProgress * 100)));
-                    barStyle = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]';
-                  } else {
-                    widthPercent = 0;
-                  }
-                }
-              } else {
-                if (idx < currentIndex) {
-                  widthPercent = 100;
-                  barStyle = 'bg-neutral-400/80';
-                } else if (idx === currentIndex) {
-                  widthPercent = 100;
-                  barStyle = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]';
-                } else {
-                  widthPercent = 0;
-                }
-              }
-
-              return (
-                <div
-                  key={idx}
-                  className="relative h-1 sm:h-1.5 rounded-full overflow-hidden bg-white/20 backdrop-blur-sm"
-                >
-                  <div
-                    className={`h-full rounded-full transition-all duration-75 ${barStyle}`}
-                    style={{ width: `${widthPercent}%` }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
+        {/* Booking CTA Button */}
+        <button
+          onClick={onOpenBooking}
+          className="group flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-neutral-950 font-bold text-xs shadow-lg shadow-amber-400/20 transition-all cursor-pointer active:scale-95"
+        >
+          <Calendar className="w-4 h-4" />
+          <span>رزرو اقامتگاه</span>
+        </button>
+      </div>
+    </header>
   );
 };
-

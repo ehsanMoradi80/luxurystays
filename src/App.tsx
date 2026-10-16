@@ -1,309 +1,156 @@
-/**
- * App.tsx
- * 
- * سایت اختصاصی هتل ۵ ستاره فوق لوکس قصر لورا
- * - صفحه اصلی کاملاً لوکس، اختصاصی مهمانان، بدون هیچ دکمه یا المان ادمین
- * - سکانس‌ها و ترنزیشن‌ها بر اساس ترتیب خطی و قطعی (اول و آخر مشخص - بدون لوپ)
- * - هدر اشرافی با نوار پروگرس زیر هدر و ناوبری اسکرولی پیوسته
- * - دسترسی به پنل ادمین React Flow منحصراً از طریق آدرس (?admin=true یا #admin)
- */
-
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { hotelExperienceGraphData, getNodeById } from './data/mockCmsData';
-import { 
-  SequencerStatus, 
-  TransitionEdge 
-} from './types/cms';
-import { 
-  VideoExperienceManager, 
-  VideoManagerHandle 
-} from './components/VideoExperienceManager';
-import { SpaceInfoOverlay } from './components/SpaceInfoOverlay';
-import { HotelMapPage } from './components/map/HotelMapPage';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { HotelExperienceGraph, SequenceNode } from './types/sequenceGraph';
+import hotelExperienceData from './data/hotelExperienceGraph.json';
 import { NavigationTimeline } from './components/NavigationTimeline';
+import { SpaceInfoOverlay } from './components/SpaceInfoOverlay';
+import { VideoExperienceManager, VideoExperienceManagerRef } from './components/VideoExperienceManager';
 import { LuxuryBookingPage } from './components/booking/LuxuryBookingPage';
+import { HotelMapPage } from './components/map/HotelMapPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
-import { DedicatedExperiencePlayer } from './components/DedicatedExperiencePlayer';
 import { audioAmbiance } from './services/AudioAmbienceEngine';
-import { useThemeAndSiteStore } from './store/useThemeAndSiteStore';
 
-export default function App() {
-  const graph = hotelExperienceGraphData;
-  const { setPreSelectedRoomId, dedicatedExperiences } = useThemeAndSiteStore();
+export function App() {
+  const graph = hotelExperienceData as HotelExperienceGraph;
+  const [currentNodeId, setCurrentNodeId] = useState<string>(graph.initialNodeId);
+  const [activeView, setActiveView] = useState<'EXPERIENCE' | 'BOOKING' | 'MAP' | 'ADMIN'>('EXPERIENCE');
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
+  const [transitionTargetTitle, setTransitionTargetTitle] = useState<string>('');
 
-  // پخش‌کننده تجربه اختصاصی فعال (مستقل از صفحه اصلی سایت)
-  const [activeDedicatedExpId, setActiveDedicatedExpId] = useState<string | null>(null);
-  const [activeDedicatedSeqId, setActiveDedicatedSeqId] = useState<string | undefined>(undefined);
-  const [dedicatedExpReturnView, setDedicatedExpReturnView] = useState<'EXPERIENCE' | 'MAP' | 'BOOKING'>('EXPERIENCE');
+  const videoExperienceRef = useRef<VideoExperienceManagerRef | null>(null);
 
-  // بررسی وضعیت ادمین بر اساس پارامتر URL یا هش (#admin یا ?admin=true)
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return (
-        window.location.search.includes('admin') ||
-        window.location.hash.toLowerCase().includes('admin')
-      );
-    }
-    return false;
-  });
+  const currentIndex = graph.nodes.findIndex((n) => n.id === currentNodeId);
+  const currentNode: SequenceNode = graph.nodes[currentIndex] || graph.nodes[0];
 
-  const [activeView, setActiveView] = useState<'EXPERIENCE' | 'BOOKING' | 'ADMIN' | 'MAP'>(() => {
-    if (typeof window !== 'undefined') {
-      if (window.location.search.includes('admin') || window.location.hash.includes('admin')) {
-        return 'ADMIN';
-      }
-      if (window.location.search.includes('map') || window.location.hash.includes('map')) {
-        return 'MAP';
-      }
-      if (window.location.search.includes('booking') || window.location.hash.includes('booking')) {
-        return 'BOOKING';
-      }
-    }
-    return 'EXPERIENCE';
-  });
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.toLowerCase();
-      const search = window.location.search.toLowerCase();
-      const hasAdmin = hash.includes('admin') || search.includes('admin');
-      const hasBooking = hash.includes('booking') || search.includes('booking');
-      
-      setIsAdmin(hasAdmin);
-      if (hasAdmin) {
-        setActiveView('ADMIN');
-      } else if (hasBooking) {
-        setActiveView('BOOKING');
-      }
-    };
-
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+  const handleNextScene = useCallback(() => {
+    videoExperienceRef.current?.goToNext();
   }, []);
 
-  const [currentNodeId, setCurrentNodeId] = useState<string>(graph.initialNodeId);
-  const [status, setStatus] = useState<SequencerStatus>('IDLE_LOOP');
+  const handlePrevScene = useCallback(() => {
+    videoExperienceRef.current?.goToPrev();
+  }, []);
 
-  // وضعیت و متادیتای ترنزیشن برای نوار پیشرفت زیر هدر
-  const [transitionProgress, setTransitionProgress] = useState<number>(0);
-  const [transitionSourceTitle, setTransitionSourceTitle] = useState<string>('');
-  const [transitionTargetTitle, setTransitionTargetTitle] = useState<string>('');
-  const [isReverseTransition, setIsReverseTransition] = useState<boolean>(false);
+  const handleJumpToScene = useCallback((nodeId: string) => {
+    videoExperienceRef.current?.jumpToNode(nodeId);
+  }, []);
 
-  // وضعیت صدا (به‌صورت پیش‌فرض قطع تا کاربر فعال کند)
-  const [isAudioMuted, setIsAudioMuted] = useState<boolean>(true);
+  const handleToggleMute = useCallback(() => {
+    const nextMuted = audioAmbiance.toggleMute();
+    setIsMuted(nextMuted);
+  }, []);
 
-  const videoManagerRef = useRef<VideoManagerHandle | null>(null);
+  // Audio start upon initial user interaction
+  useEffect(() => {
+    const startAudioOnGesture = () => {
+      audioAmbiance.playAmbiance(currentNode?.audioProfile?.tone || 'welcoming_strings', 0.6);
+      window.removeEventListener('click', startAudioOnGesture);
+    };
 
-  const currentNode = getNodeById(graph, currentNodeId) || graph.nodes[0];
-  const isTransitioning = status === 'TRANSITIONING' || status === 'PREPARING_TRANSITION';
+    window.addEventListener('click', startAudioOnGesture, { once: true });
 
-  const currentIndex = graph.nodes.findIndex((n) => n.id === currentNode.id);
-  const totalScenes = graph.nodes.length;
+    return () => {
+      window.removeEventListener('click', startAudioOnGesture);
+    };
+  }, [currentNode]);
 
-  // سوئیچ پخش صدا
-  const handleToggleAudio = useCallback(() => {
-    const nextMuted = !isAudioMuted;
-    setIsAudioMuted(nextMuted);
-    audioAmbiance.setMuted(nextMuted);
-    if (!nextMuted) {
-      audioAmbiance.playAmbiance(currentNode.audioProfile.tone, currentNode.audioProfile.volume);
-    }
-  }, [isAudioMuted, currentNode]);
-
-  const handleStatusChange = useCallback(
-    (
-      newStatus: SequencerStatus,
-      progress: number,
-      extra?: { sourceTitle: string; targetTitle: string; isReverse: boolean }
-    ) => {
-      setStatus(newStatus);
-      setTransitionProgress(progress);
-      if (extra) {
-        setTransitionSourceTitle(extra.sourceTitle);
-        setTransitionTargetTitle(extra.targetTitle);
-        setIsReverseTransition(extra.isReverse);
-      }
-    },
-    []
-  );
-
-  const handleTransitionStart = useCallback((_edge: TransitionEdge) => {}, []);
-  const handleTransitionEnd = useCallback((_targetId: string) => {}, []);
-
-  const handleOpenBooking = () => {
-    // تطبیق سکانس جاری با اتاق مناسب در صورت امکان
-    if (currentNode.id.includes('suite') || currentNode.id.includes('atrium')) {
-      setPreSelectedRoomId('suite-penthouse');
-    }
-    setActiveView('BOOKING');
-  };
-
-  // پرش مستقیم به صحنه‌های نقشه فضایی
-  const handleJumpToScene = useCallback(
-    (targetNodeId: string) => {
-      if (targetNodeId === currentNodeId) return;
-      if (videoManagerRef.current) {
-        videoManagerRef.current.transitionTo(targetNodeId);
-      } else {
-        setCurrentNodeId(targetNodeId);
-      }
-    },
-    [currentNodeId]
-  );
-
-  // ۱. حالت پخش‌کننده تجربه اختصاصی (Bespoke Experience Tour Player)
-  if (activeDedicatedExpId) {
-    const activeExp = dedicatedExperiences.find((e) => e.id === activeDedicatedExpId);
-    if (activeExp) {
-      return (
-        <DedicatedExperiencePlayer
-          experience={activeExp}
-          initialSequenceId={activeDedicatedSeqId}
-          onClose={() => {
-            setActiveDedicatedExpId(null);
-            setActiveDedicatedSeqId(undefined);
-            setActiveView(dedicatedExpReturnView);
-          }}
-          onBookNow={(exp) => {
-            setActiveDedicatedExpId(null);
-            setActiveDedicatedSeqId(undefined);
-            if (exp.category === 'suite') {
-              setPreSelectedRoomId('suite-penthouse');
-            }
-            setActiveView('BOOKING');
-          }}
-        />
-      );
-    }
-  }
-
-  // ۲. حالت ادمین: پنل مدیریت جامع هتل (سیستم تم، شخصی‌سازی سایت‌ها، ماتریس دسترسی و گراف)
-  if (activeView === 'ADMIN') {
-    return (
-      <AdminDashboard onReturnToExperience={() => setActiveView('EXPERIENCE')} />
-    );
-  }
-
-  // ۳. حالت صفحه تمام‌صفحه نقشه و پلان معماری هتل (تصویر یا ویدیو با نشانگرهای تعاملی و دکمه بک)
+  // =========================================================================
+  // 1. Standalone View: Hotel Map Atlas
+  // =========================================================================
   if (activeView === 'MAP') {
     return (
       <HotelMapPage
-        graph={graph}
+        nodes={graph.nodes}
         currentNodeId={currentNodeId}
-        onBack={() => setActiveView('EXPERIENCE')}
-        onSelectScene={(targetNodeId) => {
-          setActiveView('EXPERIENCE');
-          setTimeout(() => {
-            handleJumpToScene(targetNodeId);
-          }, 50);
-        }}
-        onOpenAdmin={() => setActiveView('ADMIN')}
-        onSelectExperience={(expId, initialSeqId) => {
-          setActiveDedicatedExpId(expId);
-          setActiveDedicatedSeqId(initialSeqId);
-          setDedicatedExpReturnView('MAP');
-        }}
-        onBookExperience={(expId) => {
-          const matchingExp = dedicatedExperiences.find((e) => e.id === expId);
-          if (matchingExp?.category === 'suite') {
-            setPreSelectedRoomId('suite-penthouse');
-          }
-          setActiveView('BOOKING');
-        }}
+        onSelectNode={handleJumpToScene}
+        onBackToExperience={() => setActiveView('EXPERIENCE')}
       />
     );
   }
 
-  // ۴. حالت صفحه اختصاصی ویزارد رزرواسیون هتل (Standalone Luxury Booking Wizard Layout)
+  // =========================================================================
+  // 2. Standalone View: Admin Dashboard
+  // =========================================================================
+  if (activeView === 'ADMIN') {
+    return (
+      <AdminDashboard
+        graph={graph}
+        onBackToExperience={() => setActiveView('EXPERIENCE')}
+      />
+    );
+  }
+
+  // =========================================================================
+  // 3. Standalone View: Luxury Booking Wizard
+  // =========================================================================
   if (activeView === 'BOOKING') {
     return (
       <div className="relative w-screen h-screen overflow-y-auto overflow-x-hidden bg-neutral-950 text-neutral-100 font-sans selection:bg-amber-400 selection:text-neutral-950">
         <LuxuryBookingPage
           onBackToExperience={() => setActiveView('EXPERIENCE')}
-          onPreviewExperience={(sceneOrExpId) => {
-            const normalized = sceneOrExpId.toLowerCase();
-            const matchingExp = dedicatedExperiences.find(
-              (e) =>
-                e.id === sceneOrExpId ||
-                e.id.includes(sceneOrExpId) ||
-                sceneOrExpId.includes(e.id) ||
-                e.sequences.some((s) => s.id === sceneOrExpId) ||
-                (normalized.includes('penthouse') && e.id.includes('penthouse')) ||
-                (normalized.includes('dining') && e.id.includes('dining')) ||
-                (normalized.includes('spa') && e.id.includes('spa')) ||
-                (normalized.includes('pool') && e.id.includes('beach')) ||
-                (normalized.includes('cabana') && e.id.includes('cabana')) ||
-                (normalized.includes('cafe') && e.id.includes('cafe')) ||
-                (normalized.includes('game') && e.id.includes('game'))
-            );
-
-            if (matchingExp) {
-              setActiveDedicatedExpId(matchingExp.id);
-              setActiveDedicatedSeqId(
-                matchingExp.sequences.some((s) => s.id === sceneOrExpId) ? sceneOrExpId : undefined
-              );
-              setDedicatedExpReturnView('BOOKING');
-            } else {
-              setActiveView('EXPERIENCE');
-              setTimeout(() => {
-                handleJumpToScene(sceneOrExpId);
-              }, 60);
-            }
+          onPreviewExperience={(sceneId) => {
+            setActiveView('EXPERIENCE');
+            setTimeout(() => {
+              handleJumpToScene(sceneId);
+            }, 60);
           }}
         />
       </div>
     );
   }
 
-  // ۵. حالت اصلی (گشت سینمایی هتل با توالی‌سنج تعاملی ویدیوها و هدر اختصاصی سایت)
+  // =========================================================================
+  // 4. Main Experience View: Cinematic Sequencer with Ambient Video Tour
+  // =========================================================================
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-neutral-950 text-neutral-100 select-none font-sans">
-      {/* =========================================================================
-          لایه Z-0: توالی‌سنج سینمایی سکانس‌ها و ترنزیشن‌ها (با کش LRU و اسکرول نرم)
-          ========================================================================= */}
+      {/* Video Sequencer Engine */}
       <VideoExperienceManager
-        ref={videoManagerRef}
+        ref={videoExperienceRef}
         graph={graph}
         currentNodeId={currentNodeId}
         onNodeChange={setCurrentNodeId}
-        onStatusChange={handleStatusChange}
-        onTransitionStart={handleTransitionStart}
-        onTransitionEnd={handleTransitionEnd}
+        onOpenBooking={() => setActiveView('BOOKING')}
+        onStatusChange={(status) => {
+          setIsTransitioning(status === 'TRANSITIONING');
+        }}
+        onTransitionStart={(edge) => {
+          setIsTransitioning(true);
+          setTransitionTargetTitle(edge.label || '');
+        }}
+        onTransitionEnd={() => {
+          setIsTransitioning(false);
+          setTransitionTargetTitle('');
+        }}
         enableScrollScrubbing={true}
       />
 
-      {/* =========================================================================
-          لایه Z-20: اطلاعات فضا، عنوان و دکمه باز کردن صفحه رزرواسیون (تنها در حالت گشت)
-          ========================================================================= */}
+      {/* Cinematic Space Information & Controls */}
       <SpaceInfoOverlay
         currentNode={currentNode}
         isTransitioning={isTransitioning}
-        onOpenBooking={handleOpenBooking}
+        onOpenBooking={() => setActiveView('BOOKING')}
         currentIndex={currentIndex !== -1 ? currentIndex : 0}
-        totalScenes={totalScenes}
+        totalScenes={graph.nodes.length}
         onSelectScene={handleJumpToScene}
+        onNextScene={handleNextScene}
+        onPrevScene={handlePrevScene}
       />
 
-      {/* =========================================================================
-          لایه Z-40: هدر لوکس هتل (Main Site Header)
-          ========================================================================= */}
+      {/* Main Site Header & Timeline Navigation */}
       <NavigationTimeline
-        isAudioMuted={isAudioMuted}
-        onToggleAudio={handleToggleAudio}
-        isAdmin={isAdmin}
-        onOpenAdmin={() => setActiveView('ADMIN')}
+        nodes={graph.nodes}
+        currentNodeId={currentNodeId}
+        onSelectNode={handleJumpToScene}
+        onOpenBooking={() => setActiveView('BOOKING')}
         onOpenMap={() => setActiveView('MAP')}
-        currentIndex={currentIndex !== -1 ? currentIndex : 0}
-        totalScenes={totalScenes}
-        currentNode={currentNode}
+        onOpenAdmin={() => setActiveView('ADMIN')}
+        isMuted={isMuted}
+        onToggleMute={handleToggleMute}
         isTransitioning={isTransitioning}
-        transitionProgress={transitionProgress}
-        transitionSourceTitle={transitionSourceTitle}
         transitionTargetTitle={transitionTargetTitle}
-        isReverseTransition={isReverseTransition}
-        isBookingOpen={false}
       />
     </main>
   );
 }
+
+export default App;

@@ -1,1518 +1,480 @@
-/**
- * LuxuryBookingPage.tsx
- * 
- * کامپوننت ویزارد چند مرحله‌ای رزرواسیون لوکس اقامتگاه پنج ستاره قصر لورا
- * 
- * ویژگی‌های کلیدی منطبق بر نیازمندی‌ها:
- * ۱. حذف هدر سنتی و جایگزینی با دکمه‌های شناور فاخر بازگشت (Back) و انصراف (Skip/Close)
- * ۲. پشتیبانی از سوایپ افقی هوشمند (Swipe Left = مرحله بعد، Swipe Right = مرحله قبل با رعایت کامل RTL)
- * ۳. سیستم ذخیره‌سازی داخلی پایدار (Internal State Persistence via LocalStorage)
- * ۴. تقویم جلالی مدرن و سفارشی‌سازی شده با ارقام ۱۰۰٪ فارسی
- * ۵. تجربه Mobile-First ارگونومیک با نوار اقدام فیکس در Thumb Zone
- * ۶. ترنزیشن‌های سیال جهت‌دار با Motion
- */
-
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ArrowRight, 
-  Sparkles, 
-  Calendar as CalendarIcon, 
-  Bed, 
-  Users, 
-  Check, 
-  ChevronLeft, 
-  ChevronRight, 
-  CreditCard, 
-  KeyRound, 
-  Lock, 
-  ShieldCheck, 
-  CheckCircle2, 
-  QrCode, 
-  Download, 
-  Copy, 
-  User, 
-  Phone, 
-  Mail, 
-  FileText,
-  ArrowLeft,
-  FastForward,
-  SkipForward,
-  Play
+import React, { useState } from 'react';
+import {
+  ArrowRight,
+  Sparkles,
+  Calendar,
+  Users,
+  CheckCircle2,
+  Clock,
+  ShieldCheck,
+  Star,
+  Coffee,
+  UtensilsCrossed,
+  Waves,
+  Car,
+  Plane,
+  X
 } from 'lucide-react';
-import { useThemeAndSiteStore, HotelRoom, ExperiencePackage } from '../../store/useThemeAndSiteStore';
-import { 
-  toPersianDigits, 
-  formatPersianPrice, 
-  calculateJalaliNights,
-  autoPersianText
-} from '../../utils/JalaliDate';
-import { ModernJalaliCalendar } from './ModernJalaliCalendar';
-import { CustomInput } from '../ui/CustomInput';
-import { CustomSelect } from '../ui/CustomSelect';
-import { CustomButton } from '../ui/CustomButton';
 
 interface LuxuryBookingPageProps {
   onBackToExperience: () => void;
   onPreviewExperience?: (sceneId: string) => void;
 }
 
-interface VIPService {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-}
-
-const VIP_SERVICES: VIPService[] = [
+const SUITES = [
   {
-    id: 'heli-transfer',
-    title: 'ترانسفر بالگرد تشریفاتی از فرودگاه',
-    description: 'فرود مستقیم در هلی‌پد اختصاصی هتل با پذیرایی خاویار بلوگا',
-    price: 18000000,
+    id: 'imperial-penthouse',
+    title: 'پنت‌هاوس امپریال دوبلکس',
+    sceneId: 'scene-02-penthouse',
+    price: '۱۴۵,۰۰۰,۰۰۰ تومان',
+    view: 'چشم‌انداز ابدی ۳۶۰ درجه به اقیانوس',
+    capacity: '۴ تا ۶ نفر',
+    area: '۴۸۰ متر مربع',
+    image: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
+    features: ['استخر اختصاصی معلق', 'پیشخدمت ۲۴ ساعته', 'جکوزی روباز', 'تراس آفتابگیر'],
   },
   {
-    id: 'private-chef',
-    title: 'سرآشپز اختصاصی ستاره‌دار میشلن',
-    description: 'طراحی منوی شام اختصاصی در تراس سوئیت با مواد اولیه ارگانیک دریایی',
-    price: 12500000,
+    id: 'royal-ocean-suite',
+    title: 'سوئیت سلطنتی رویال اوشن',
+    sceneId: 'scene-05-beach',
+    price: '۸۸,۰۰۰,۰۰۰ تومان',
+    view: 'خط افق خلیج فارس و ساحل اختصاصی',
+    capacity: '۲ تا ۳ نفر',
+    area: '۲۲۰ متر مربع',
+    image: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
+    features: ['تراس رو به دریا', 'حمام مرمرین با جکوزی', 'مینی‌بار اختصاصی پرمیوم'],
   },
   {
-    id: 'thalasso-spa',
-    title: 'پکیج کامل اسپا، تالاسوتراپی و حمام ترکی',
-    description: 'ماساژ دونفره با روغن‌های دست‌ساز و ماسک طلای ۲۴ عیار',
-    price: 8500000,
-  },
-  {
-    id: 'yacht-cruise',
-    title: 'گشت عصرگاهی با یات تفریحی اختصاصی قصر',
-    description: 'سفر دریایی ۳ ساعته در هنگام غروب همراه با اجرای موسیقی زنده',
-    price: 22000000,
+    id: 'crystal-garden-suite',
+    title: 'سوئیت پرزیدنتال باغ کریستال',
+    sceneId: 'scene-01-entrance',
+    price: '۶۵,۰۰۰,۰۰۰ تومان',
+    view: 'باغ‌های فرانسوی و آب‌نمای مرمرین',
+    capacity: '۲ نفر',
+    area: '۱۶۰ متر مربع',
+    image: 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?auto=format&fit=crop&w=800&q=80',
+    features: ['حیاط اختصاصی خلوت', 'آروماتراپی ارگانیک', 'صبحانه ویژه در سوئیت'],
   },
 ];
 
-const LOCAL_STORAGE_KEY = 'luxury_palace_booking_wizard_draft_v2';
+const VIP_SERVICES = [
+  {
+    id: 'airport-limo',
+    title: 'ترانسفر اختصاصی فرودگاهی با رولزرویس',
+    price: '۱۸,۰۰۰,۰۰۰ تومان',
+    icon: Car,
+  },
+  {
+    id: 'heli-transfer',
+    title: 'ترانسفر هلیکوپتر بر فراز ساحل',
+    price: '۳۵,۰۰۰,۰۰۰ تومان',
+    icon: Plane,
+  },
+  {
+    id: 'private-chef',
+    title: 'سرو شام ۶ دوره‌ای با سرآشپز میشلن در سوئیت',
+    price: '۲۲,۰۰۰,۰۰۰ تومان',
+    icon: UtensilsCrossed,
+  },
+  {
+    id: 'spa-vip',
+    title: 'پکیج ماساژ و آب‌درمانی ۲ نفره طلایی',
+    price: '۱۴,۰۰۰,۰۰۰ تومان',
+    icon: Waves,
+  },
+];
 
-export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ 
-  onBackToExperience,
-  onPreviewExperience 
-}) => {
-  const { 
-    rooms, 
-    packages,
-    activeSiteId, 
-    sites, 
-    addBooking, 
-    preSelectedRoomId,
-  } = useThemeAndSiteStore();
+export const LuxuryBookingPage: React.FC<LuxuryBookingPageProps> = ({ onBackToExperience }) => {
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [selectedSuite, setSelectedSuite] = useState(SUITES[0]);
+  const [stayNights, setStayNights] = useState<number>(3);
+  const [guestCount, setGuestCount] = useState<number>(2);
+  const [selectedServices, setSelectedServices] = useState<string[]>(['airport-limo']);
+  const [guestName, setGuestName] = useState<string>('جناب آقای رادمنش');
+  const [guestPhone, setGuestPhone] = useState<string>('۰۹۱۲۱۲۳۴۵۶۷');
+  const [guestNotes, setGuestNotes] = useState<string>('سرو چای ارل گری و میوه‌های استوایی هنگام ورود');
 
-  const currentSite = sites[activeSiteId];
-
-  // حالت رزرواسیون: اقامت کامل سوئیت یا تجربه/تفریح اختصاصی مستقل
-  const [bookingCategory, setBookingCategory] = useState<'suite' | 'experience'>('suite');
-
-  // لیست تجارب مستقل قابل رزرو مجزا (مانند رستوران، کافه، اسپا و کلاب ساحلی)
-  const standaloneExperiences = packages.filter((p) => p.type === 'standalone_experience' || p.type === 'facility');
-  const [selectedExperienceId, setSelectedExperienceId] = useState<string>(
-    standaloneExperiences[0]?.id || 'pkg-dining-ambrosia'
-  );
-
-  const selectedExperience = packages.find((p) => p.id === selectedExperienceId) || standaloneExperiences[0];
-
-  // بازیابی وضعیت ذخیره‌شده از LocalStorage برای پایداری کامل (Persistence)
-  const loadSavedState = () => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // ignore
-    }
-    return null;
-  };
-
-  const initialDraft = loadSavedState();
-
-  // جهت انیمیشن اسلاید (۱: به جلو، -۱: به عقب)
-  const [slideDirection, setSlideDirection] = useState<number>(1);
-
-  // مراحل رزرو: ۱: اقامتگاه | ۲: تقویم جلالی | ۳: خدمات و مشخصات | ۴: پیش‌فاکتور و پرداخت | ۵: واچر رسمی
-  const [currentStep, setCurrentStep] = useState<number>(initialDraft?.currentStep || 1);
-
-  // سوئیت انتخابی
-  const [selectedRoom, setSelectedRoom] = useState<HotelRoom>(() => {
-    if (initialDraft?.selectedRoomId) {
-      const found = rooms.find((r) => r.id === initialDraft.selectedRoomId);
-      if (found) return found;
-    }
-    if (preSelectedRoomId) {
-      const found = rooms.find((r) => r.id === preSelectedRoomId);
-      if (found) return found;
-    }
-    return rooms[0];
-  });
-
-  // تاریخ و زمان به تقویم جلالی
-  const [startDate, setStartDate] = useState(initialDraft?.startDate || '1405/07/04');
-  const [endDate, setEndDate] = useState(initialDraft?.endDate || '1405/07/07');
-  const [startTime, setStartTime] = useState(initialDraft?.startTime || currentSite?.checkInHour || '۱۴:۰۰');
-  const [endTime, setEndTime] = useState(initialDraft?.endTime || currentSite?.checkOutHour || '۱۲:۰۰');
-  const [guestCount, setGuestCount] = useState(initialDraft?.guestCount || '2');
-  const [stayPurpose, setStayPurpose] = useState(initialDraft?.stayPurpose || 'تعطیلات و آرامش تشریفاتی');
-
-  // خدمات تشریفاتی و مشخصات میهمان
-  const [selectedVipServices, setSelectedVipServices] = useState<string[]>(initialDraft?.selectedVipServices || []);
-  const [guestName, setGuestName] = useState(initialDraft?.guestName || '');
-  const [guestPhone, setGuestPhone] = useState(initialDraft?.guestPhone || '');
-  const [guestEmail, setGuestEmail] = useState(initialDraft?.guestEmail || '');
-  const [specialRequests, setSpecialRequests] = useState(initialDraft?.specialRequests || '');
-
-  // درگاه‌های پرداخت رسمی شاپرک
-  const [selectedGateway, setSelectedGateway] = useState<'mellat' | 'saman' | 'sadad' | 'zarinpal'>('mellat');
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [isRedirectingToBank, setIsRedirectingToBank] = useState(false);
-
-  // واچر رسمی
-  const [generatedTrackingCode, setGeneratedTrackingCode] = useState('');
-  const [copiedCode, setCopiedCode] = useState(false);
-
-  // ذخیره در LocalStorage در هر تغییر وضعیت
-  useEffect(() => {
-    if (currentStep < 5) {
-      const draft = {
-        currentStep,
-        selectedRoomId: selectedRoom?.id,
-        startDate,
-        endDate,
-        startTime,
-        endTime,
-        guestCount,
-        stayPurpose,
-        selectedVipServices,
-        guestName,
-        guestPhone,
-        guestEmail,
-        specialRequests,
-      };
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(draft));
-      } catch {
-        // ignore
-      }
-    }
-  }, [
-    currentStep,
-    selectedRoom,
-    startDate,
-    endDate,
-    startTime,
-    endTime,
-    guestCount,
-    stayPurpose,
-    selectedVipServices,
-    guestName,
-    guestPhone,
-    guestEmail,
-    specialRequests,
-  ]);
-
-  // اسکرول به بالای صفحه در هنگام تغییر مرحله
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [currentStep]);
-
-  // جابجایی بین مراحل با انیمیشن جهت‌دار
-  const goToNextStep = useCallback(() => {
-    if (currentStep < 4) {
-      setSlideDirection(1);
-      setCurrentStep((prev) => prev + 1);
-    }
-  }, [currentStep]);
-
-  const goToPrevStep = useCallback(() => {
-    if (currentStep > 1) {
-      setSlideDirection(-1);
-      setCurrentStep((prev) => prev - 1);
-    } else {
-      onBackToExperience();
-    }
-  }, [currentStep, onBackToExperience]);
-
-  // عملیات اسکیپ (رد کردن مرحله جاری و رفتن به گام بعد بدون معطلی)
-  const handleSkip = useCallback(() => {
-    if (currentStep < 4) {
-      setSlideDirection(1);
-      setCurrentStep((prev) => prev + 1);
-    } else {
-      onBackToExperience();
-    }
-  }, [currentStep, onBackToExperience]);
-
-  // =========================================================================
-  // پیاده‌سازی فوق‌العاده حساس و پایدار سوایپ افقی (Swipe Left / Swipe Right)
-  // پشتیبانی از تاچ لمسی موبایل (با مهار touchcancel)، درگ ماوس/ترک‌پد دسکتاپ و کلیدهای جهت‌نما:
-  // - سوایپ به راست (Swipe Right - کشیدن انگشت/ماوس به سمت راست): انتقال به مرحله بعد
-  // - سوایپ به چپ (Swipe Left - کشیدن انگشت/ماوس به سمت چپ): بازگشت به مرحله قبل
-  // =========================================================================
-  const touchStartXRef = useRef<number | null>(null);
-  const touchStartYRef = useRef<number | null>(null);
-  const touchCurrentXRef = useRef<number | null>(null);
-  const touchCurrentYRef = useRef<number | null>(null);
-  const touchStartTimeRef = useRef<number>(0);
-
-  const isPointerDownRef = useRef<boolean>(false);
-  const pointerStartXRef = useRef<number | null>(null);
-  const pointerStartYRef = useRef<number | null>(null);
-  const lastSwipeTimestampRef = useRef<number>(0);
-
-  const isInteractiveElement = (target: EventTarget | null) => {
-    if (!target || !(target instanceof HTMLElement)) return false;
-    return Boolean(target.closest('input, textarea, select, option'));
-  };
-
-  const executeSwipe = useCallback(
-    (deltaX: number) => {
-      const now = Date.now();
-      // قفل امنیتی جلوگیری از پرش دو مرحله‌ای: هر سوایپ فقط و فقط ۱ مرحله جابجا می‌شود
-      if (now - lastSwipeTimestampRef.current < 450) {
-        return;
-      }
-
-      if (currentStep < 5) {
-        if (deltaX > 0) {
-          // کشیدن به راست => دقیقا یک مرحله به جلو
-          lastSwipeTimestampRef.current = now;
-          goToNextStep();
-        } else if (deltaX < 0) {
-          // کشیدن به چپ => دقیقا یک مرحله به عقب
-          lastSwipeTimestampRef.current = now;
-          goToPrevStep();
-        }
-      }
-    },
-    [currentStep, goToNextStep, goToPrevStep]
-  );
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (isInteractiveElement(e.target)) return;
-    touchStartXRef.current = e.touches[0].clientX;
-    touchStartYRef.current = e.touches[0].clientY;
-    touchCurrentXRef.current = e.touches[0].clientX;
-    touchCurrentYRef.current = e.touches[0].clientY;
-    touchStartTimeRef.current = Date.now();
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    touchCurrentXRef.current = e.touches[0].clientX;
-    touchCurrentYRef.current = e.touches[0].clientY;
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
-    const endX = touchCurrentXRef.current ?? (e.changedTouches[0] ? e.changedTouches[0].clientX : touchStartXRef.current);
-    const endY = touchCurrentYRef.current ?? (e.changedTouches[0] ? e.changedTouches[0].clientY : touchStartYRef.current);
-
-    const deltaX = endX - touchStartXRef.current;
-    const deltaY = endY - touchStartYRef.current;
-    const deltaTime = Date.now() - touchStartTimeRef.current;
-
-    // تشخیص سوایپ افقی با آستانه حساس و سریع
-    const isHorizontalDominant = Math.abs(deltaX) > Math.abs(deltaY) * 0.6;
-    const hasEnoughDistance = Math.abs(deltaX) >= 35 || (Math.abs(deltaX) >= 25 && deltaTime < 350);
-
-    if (isHorizontalDominant && hasEnoughDistance) {
-      executeSwipe(deltaX);
-    }
-
-    touchStartXRef.current = null;
-    touchStartYRef.current = null;
-    touchCurrentXRef.current = null;
-    touchCurrentYRef.current = null;
-  };
-
-  const handleTouchCancel = () => {
-    touchStartXRef.current = null;
-    touchStartYRef.current = null;
-    touchCurrentXRef.current = null;
-    touchCurrentYRef.current = null;
-  };
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    // جلوگیری از تکرار رویداد در تاچ موبایل (تاچ با touchstart مدیریت می‌شود)
-    if (e.pointerType === 'touch') return;
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    if (isInteractiveElement(e.target)) return;
-    isPointerDownRef.current = true;
-    pointerStartXRef.current = e.clientX;
-    pointerStartYRef.current = e.clientY;
-  };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (e.pointerType === 'touch') return;
-    if (!isPointerDownRef.current || pointerStartXRef.current === null) {
-      isPointerDownRef.current = false;
-      return;
-    }
-    const deltaX = e.clientX - pointerStartXRef.current;
-    const deltaY = pointerStartYRef.current !== null ? e.clientY - pointerStartYRef.current : 0;
-
-    if (Math.abs(deltaX) >= 30 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
-      executeSwipe(deltaX);
-    }
-
-    isPointerDownRef.current = false;
-    pointerStartXRef.current = null;
-    pointerStartYRef.current = null;
-  };
-
-  // پشتیبانی سراسری از ماوس/ترک‌پد و کلیدهای کیبورد (راست = بعد، چپ = قبل)
-  useEffect(() => {
-    const handleGlobalPointerUp = (e: PointerEvent) => {
-      if (e.pointerType === 'touch') return;
-      if (!isPointerDownRef.current || pointerStartXRef.current === null) {
-        isPointerDownRef.current = false;
-        pointerStartXRef.current = null;
-        pointerStartYRef.current = null;
-        return;
-      }
-      const deltaX = e.clientX - pointerStartXRef.current;
-      const deltaY = pointerStartYRef.current !== null ? e.clientY - pointerStartYRef.current : 0;
-
-      if (Math.abs(deltaX) >= 30 && Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
-        executeSwipe(deltaX);
-      }
-
-      isPointerDownRef.current = false;
-      pointerStartXRef.current = null;
-      pointerStartYRef.current = null;
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isInteractiveElement(document.activeElement)) return;
-      if (e.key === 'ArrowRight') {
-        goToNextStep();
-      } else if (e.key === 'ArrowLeft') {
-        goToPrevStep();
-      }
-    };
-
-    window.addEventListener('pointerup', handleGlobalPointerUp);
-    window.addEventListener('pointercancel', handleGlobalPointerUp);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('pointerup', handleGlobalPointerUp);
-      window.removeEventListener('pointercancel', handleGlobalPointerUp);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [executeSwipe, goToNextStep, goToPrevStep]);
-
-  // محاسبه شب‌های اقامت با تقویم جلالی
-  const totalNights = calculateJalaliNights(startDate, endDate);
-
-  // محاسبات مالی دقیق بر اساس نوع رزرو (سوئیت شبانه یا تجربه تفریحی)
-  const roomCostTotal = bookingCategory === 'suite'
-    ? (selectedRoom?.pricePerNight || 0) * totalNights
-    : (selectedExperience?.priceUnit === 'هر نفر'
-        ? (selectedExperience?.price || 0) * (parseInt(guestCount, 10) || 1)
-        : (selectedExperience?.price || 0));
-
-  const vipServicesTotal = selectedVipServices.reduce((sum, sId) => {
-    const s = VIP_SERVICES.find((v) => v.id === sId);
-    return sum + (s?.price || 0);
-  }, 0);
-  const taxesAndService = Math.round((roomCostTotal + vipServicesTotal) * 0.09);
-  const grandTotal = roomCostTotal + vipServicesTotal + taxesAndService;
-
-  const toggleVipService = (serviceId: string) => {
-    setSelectedVipServices((prev) =>
+  const toggleService = (serviceId: string) => {
+    setSelectedServices((prev) =>
       prev.includes(serviceId) ? prev.filter((id) => id !== serviceId) : [...prev, serviceId]
     );
   };
 
-  // انتقال به درگاه پرداخت رسمی شاپرک و صدور واچر پس از بازگشت
-  const handleExecutePayment = () => {
-    setIsProcessingPayment(true);
-    setIsRedirectingToBank(true);
-
-    setTimeout(() => {
-      const activeTitle = bookingCategory === 'suite' 
-        ? selectedRoom.title 
-        : `تجربه اختصاصی ${selectedExperience?.title || ''}`;
-
-      const activeItemId = bookingCategory === 'suite'
-        ? selectedRoom.id
-        : (selectedExperience?.id || 'exp-standalone');
-
-      const newBooking = addBooking({
-        siteId: activeSiteId,
-        roomId: activeItemId,
-        roomTitle: activeTitle,
-        guestName: guestName || 'میهمان عالی‌رتبه قصر',
-        guestEmail: guestEmail || 'guest@laura-palace.com',
-        guestPhone: guestPhone || '۰۹۱۲۰۰۰۰۰۰۰',
-        checkInDate: startDate,
-        checkOutDate: endDate,
-        checkInTime: startTime,
-        checkOutTime: endTime,
-        guestCount: parseInt(guestCount, 10) || 2,
-        vipServices: selectedVipServices.map(
-          (id) => VIP_SERVICES.find((v) => v.id === id)?.title || id
-        ),
-        totalPrice: grandTotal,
-        paymentStatus: 'paid_fake',
-      });
-
-      // پاک کردن پیش‌نویس موقت
-      try {
-        localStorage.removeItem(LOCAL_STORAGE_KEY);
-      } catch {
-        // ignore
-      }
-
-      setGeneratedTrackingCode(newBooking.trackingCode);
-      setIsProcessingPayment(false);
-      setIsRedirectingToBank(false);
-      setSlideDirection(1);
-      setCurrentStep(5);
-    }, 2000);
+  const handleNext = () => {
+    if (currentStep < 5) setCurrentStep((prev) => prev + 1);
   };
 
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(generatedTrackingCode);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-  };
-
-  const stepsList = [
-    { num: 1, title: 'انتخاب سوئیت', desc: 'بررسی ظرفیت لحظه‌ای' },
-    { num: 2, title: 'زمان و مسافران', desc: 'تقویم جلالی و ساعات' },
-    { num: 3, title: 'خدمات و مشخصات', desc: 'کانسیرژ و مشخصات' },
-    { num: 4, title: 'پیش‌فاکتور و پرداخت', desc: 'تسویه شبیه‌ساز' },
-    { num: 5, title: 'واچر رسمی', desc: 'کلید دیجیتال و صدور' },
-  ];
-
-  // انیمیشن ترنزیشن مراحل
-  const slideVariants = {
-    enter: (direction: number) => ({
-      x: direction > 0 ? -40 : 40,
-      opacity: 0,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-    },
-    exit: (direction: number) => ({
-      x: direction > 0 ? 40 : -40,
-      opacity: 0,
-    }),
+  const handlePrev = () => {
+    if (currentStep > 1) {
+      setCurrentStep((prev) => prev - 1);
+    } else {
+      onBackToExperience();
+    }
   };
 
   return (
-    <div
-      dir="rtl"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchCancel}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      className="w-full min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-900 via-neutral-950 to-black text-neutral-100 font-sans flex flex-col relative selection:bg-amber-400 selection:text-neutral-950 pb-24 lg:pb-12 touch-pan-y"
-    >
-      {/* =========================================================================
-          هدر اختصاصی و مستقل ویزارد رزرواسیون هتل
-          - طراحی لوکس و کاملاً مستقل از لیوت صفحه اصلی سایت
-          - دکمه بازگشت به سایت، عنوان هتل، نوار پیشرفت مراحل و دکمه Skip
-          ========================================================================= */}
+    <div className="w-full min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-900 via-neutral-950 to-black text-neutral-100 font-sans flex flex-col relative selection:bg-amber-400 selection:text-neutral-950 pb-20">
+      {/* Standalone Wizard Header */}
       <header className="sticky top-0 z-40 px-4 sm:px-8 py-3.5 bg-neutral-950/80 backdrop-blur-2xl border-b border-white/10 flex items-center justify-between gap-3 sm:gap-6 shadow-2xl">
-        {/* دکمه بازگشت (Back) و نشان هتل */}
         <div className="flex items-center gap-3 shrink-0">
           <button
-            type="button"
-            onClick={goToPrevStep}
+            onClick={handlePrev}
             className="group px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-black/60 border border-white/15 hover:border-amber-400/50 text-neutral-300 hover:text-amber-300 flex items-center gap-1.5 backdrop-blur-md transition-all cursor-pointer shadow-lg active:scale-95 text-xs shrink-0"
             title={currentStep === 1 ? 'بازگشت به سایت' : 'مرحله قبل'}
-            aria-label="بازگشت"
           >
             <ArrowRight className="w-4 h-4 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
-            <span className="font-medium">{currentStep === 1 ? 'بازگشت به سایت' : 'مرحله قبل'}</span>
+            <span className="font-medium">{currentStep === 1 ? 'بازگشت به سایت (Esc)' : 'قبلی'}</span>
           </button>
 
           <div className="hidden sm:flex items-center gap-2 border-r border-white/10 pr-3 text-xs">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span className="font-serif text-amber-300/90 font-medium tracking-wide">
-              {currentSite?.name || 'قصر لورا'}
-            </span>
+            <span className="font-serif text-amber-300/90 font-medium tracking-wide">قصر لورا</span>
             <span className="text-neutral-400">&bull; ویزارد رزرواسیون</span>
           </div>
         </div>
 
-        {/* نوار پیشرفت مراحل: فقط خطوط پیشرفت تمیز و مینیمال بدون هیچ متن، شماره، عنوان یا بج */}
+        {/* Minimal Steps Progress */}
         {currentStep < 5 && (
-          <div className="flex-1 max-w-xl flex items-center gap-1.5 sm:gap-2.5">
+          <div className="flex-1 max-w-xl flex items-center gap-2">
             {[1, 2, 3, 4].map((stepNum) => {
-              const isActive = currentStep === stepNum;
               const isDone = currentStep > stepNum;
-
+              const isActive = currentStep === stepNum;
               return (
-                <button
-                  key={stepNum}
-                  type="button"
-                  onClick={() => {
-                    if (isDone) {
-                      setSlideDirection(-1);
-                      setCurrentStep(stepNum);
-                    }
-                  }}
-                  className={`flex-1 py-1 transition-all ${
-                    isDone ? 'cursor-pointer' : 'cursor-default'
-                  }`}
-                  aria-label={`مرحله ${stepNum}`}
-                >
+                <div key={stepNum} className="flex-1 flex flex-col gap-1">
                   <div
-                    className={`h-1.5 w-full rounded-full transition-all duration-300 ${
-                      isActive
-                        ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)]'
-                        : isDone
-                        ? 'bg-emerald-400/80'
-                        : 'bg-white/15'
+                    className={`h-1.5 rounded-full transition-all duration-500 ${
+                      isActive ? 'bg-amber-400 shadow-md shadow-amber-400/30' : isDone ? 'bg-amber-400/70' : 'bg-neutral-800'
                     }`}
                   />
-                </button>
+                </div>
               );
             })}
           </div>
         )}
 
-        {/* اکشن اختصاصی Skip (رد کردن) - در مراحل ۱ تا ۴ */}
+        {/* Skip or Exit */}
         {currentStep < 5 ? (
           <button
-            type="button"
-            onClick={handleSkip}
-            className="group px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 hover:border-amber-400 text-amber-300 hover:text-amber-200 flex items-center gap-1.5 backdrop-blur-md transition-all cursor-pointer shadow-lg active:scale-95 text-xs font-semibold shrink-0"
-            title="رد کردن مرحله (Skip)"
-            aria-label="رد کردن مرحله"
+            onClick={handleNext}
+            className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-amber-200 text-xs transition-all cursor-pointer shrink-0"
           >
-            <span className="font-medium">رد کردن</span>
-            <FastForward className="w-3.5 h-3.5 text-amber-400 group-hover:-translate-x-0.5 transition-transform" style={{ transform: 'scaleX(-1)' }} />
+            مرحله بعد &larr;
           </button>
         ) : (
           <button
-            type="button"
             onClick={onBackToExperience}
-            className="px-3.5 py-1.5 rounded-xl bg-amber-400 text-neutral-950 font-bold text-xs hover:bg-amber-300 transition-all cursor-pointer shadow-md shrink-0"
+            className="px-4 py-1.5 rounded-xl bg-amber-400 text-neutral-950 font-bold text-xs hover:bg-amber-300 transition-all cursor-pointer shadow-md shrink-0"
           >
             اتمام و خروج
           </button>
         )}
       </header>
 
-      {/* =========================================================================
-          محتوای اصلی رزرواسیون: طراحی دو ستونه با قابلیت سوایپ
-          ========================================================================= */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-8 flex flex-col lg:flex-row items-start gap-8">
-        {/* ستون اصلی: مراحل ویزارد با انیمیشن ورود و خروج */}
-        <div className="flex-1 w-full overflow-hidden">
-          <AnimatePresence mode="wait" custom={slideDirection}>
-            <motion.div
-              key={currentStep}
-              custom={slideDirection}
-              variants={slideVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              className="space-y-6 touch-pan-y select-none"
-            >
-              {/* =====================================================================
-                  مرحله ۱: انتخاب اقامتگاه و سوئیت مجلل (Room Selection First)
-                  ===================================================================== */}
-              {/* =====================================================================
-                  مرحله ۱: انتخاب اقامتگاه یا تجارب مستقل (Room / Experience Selection)
-                  ===================================================================== */}
-              {currentStep === 1 && (
-                <div className="space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                      <h2 className="text-xl sm:text-2xl font-black text-white mb-1.5 flex items-center gap-2">
-                        {bookingCategory === 'suite' ? <Bed className="w-6 h-6 text-amber-400" /> : <Sparkles className="w-6 h-6 text-amber-400" />}
-                        <span>انتخاب اقامتگاه یا تجارب اختصاصی {currentSite?.name || 'قصر لورا'}</span>
-                      </h2>
-                      <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed">
-                        می‌توانید اقامت کامل در سوئیت‌های مجلل (شامل پکیج تجارب) یا هر تجربه مستقل را به صورت جداگانه رزرو کنید.
-                      </p>
-                    </div>
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-8">
+        {/* Step 1: Suite Selection */}
+        {currentStep === 1 && (
+          <div className="space-y-6">
+            <div className="text-center max-w-xl mx-auto mb-8">
+              <span className="text-xs uppercase tracking-widest text-amber-400 font-semibold">مرحله نخست</span>
+              <h2 className="text-2xl sm:text-3xl font-black text-white mt-1 mb-2">انتخاب اقامتگاه رویایی</h2>
+              <p className="text-xs sm:text-sm text-neutral-400">سوئیت مورد نظر خود را برای تجربه اقامتی شاهانه انتخاب کنید.</p>
+            </div>
 
-                    {/* تب‌بار لوکس سوئیچ میان «اقامت سوئیت» و «تجارب مستقل» */}
-                    <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-black/60 border border-white/10 w-fit backdrop-blur-xl shrink-0 self-start sm:self-auto">
-                      <button
-                        type="button"
-                        onClick={() => setBookingCategory('suite')}
-                        className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
-                          bookingCategory === 'suite'
-                            ? 'bg-amber-400 text-neutral-950 shadow-md shadow-amber-400/20'
-                            : 'text-neutral-300 hover:text-white hover:bg-white/5'
-                        }`}
-                      >
-                        <Bed className="w-4 h-4" />
-                        <span>اقامت کامل سوئیت‌ها</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBookingCategory('experience')}
-                        className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
-                          bookingCategory === 'experience'
-                            ? 'bg-amber-400 text-neutral-950 shadow-md shadow-amber-400/20'
-                            : 'text-neutral-300 hover:text-white hover:bg-white/5'
-                        }`}
-                      >
-                        <Sparkles className="w-4 h-4" />
-                        <span>تجارب و تفریحات مستقل</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* ۱. نمایش کارت‌های سوئیت‌های مجلل هتل (با تجارب مشمول و دکمه مشاهده ویدیویی) */}
-                  {bookingCategory === 'suite' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      {rooms.map((room) => {
-                        const isSelected = selectedRoom?.id === room.id;
-                        const slotStatus = room.slots[startDate] || 'available';
-                        const isBooked = slotStatus === 'booked';
-
-                        // تجارب مشمول این سوئیت
-                        const includedExperiences = room.id.includes('penthouse')
-                          ? ['سالن پذیرایی ۳۶۰ درجه', 'اتاق خواب رویال مستر', 'تراس معلق با جکوزی روباز', 'سرپیشخدمت اختصاصی']
-                          : room.id.includes('presidential')
-                          ? ['آتریوم سلطنتی', 'باغ مرکبات اختصاصی', 'استخر آبگرم سرپوشیده', 'سینمای خصوصی ۸ نفره']
-                          : ['پاویون سروهای کهن', 'حوض فیروزه‌ای خلوت', 'تراس چوبی مدیتیشن', 'شومینه هیزمی سنگی'];
-
-                        return (
-                          <div
-                            key={room.id}
-                            onClick={() => !isBooked && setSelectedRoom(room)}
-                            className={`rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between backdrop-blur-xl ${
-                              isSelected
-                                ? 'bg-black/60 border-amber-400 ring-2 ring-amber-400/40 shadow-2xl shadow-amber-400/10 scale-[1.01]'
-                                : isBooked
-                                ? 'bg-black/40 border-neutral-800/80 opacity-40 cursor-not-allowed'
-                                : 'bg-black/45 border-white/10 hover:border-amber-400/40 cursor-pointer hover:shadow-xl'
-                            }`}
-                          >
-                            <div>
-                              {/* تصویر سوئیت و دکمه مشاهده ویدیویی */}
-                              <div className="relative h-48 sm:h-52 w-full overflow-hidden">
-                                <img
-                                  src={room.imageUrl}
-                                  alt={room.title}
-                                  referrerPolicy="no-referrer"
-                                  className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent" />
-
-                                {/* وضعیت لحظه‌ای ظرفیت */}
-                                <div className="absolute top-3 right-3 flex items-center gap-2">
-                                  {slotStatus === 'available' ? (
-                                    <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-500/90 text-white backdrop-blur-md shadow-md">
-                                      آماده تحویل
-                                    </span>
-                                  ) : slotStatus === 'limited' ? (
-                                    <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-500/90 text-neutral-950 backdrop-blur-md shadow-md">
-                                      ۱ واحد مانده
-                                    </span>
-                                  ) : (
-                                    <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-rose-600 text-white backdrop-blur-md shadow-md">
-                                      تکمیل ظرفیت
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* دکمه پیش‌نمایش تجربه ویدیویی در گوشه بالای چپ تصویر */}
-                                <div className="absolute top-3 left-3">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onPreviewExperience?.(room.id.includes('atrium') ? 'lobby' : 'suite');
-                                    }}
-                                    className="px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/90 border border-amber-400/50 hover:border-amber-400 text-amber-300 hover:text-amber-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xl active:scale-95 cursor-pointer backdrop-blur-md"
-                                    title="مشاهده سکانس‌های ویدیویی این سوئیت"
-                                  >
-                                    <Play className="w-3.5 h-3.5 fill-current" />
-                                    <span>مشاهده تجربه ویدیویی</span>
-                                  </button>
-                                </div>
-
-                                <div className="absolute bottom-3 right-3 left-3 text-right">
-                                  <span className="text-xs text-amber-300 font-semibold block drop-shadow-sm">
-                                    {room.viewType}
-                                  </span>
-                                  <h3 className="text-base sm:text-lg font-bold text-white drop-shadow-md">
-                                    {autoPersianText(room.title)}
-                                  </h3>
-                                </div>
-                              </div>
-
-                              {/* مشخصات و بخش‌های مشمول سوئیت */}
-                              <div className="p-4 sm:p-5 space-y-3.5">
-                                <div className="flex items-center justify-between text-xs text-neutral-300 border-b border-neutral-800 pb-2.5">
-                                  <span className="flex items-center gap-1.5">
-                                    <span>متراژ:</span>
-                                    <strong className="text-white font-bold">
-                                      {toPersianDigits(room.sizeM2)} متر مربع
-                                    </strong>
-                                  </span>
-                                  <span className="flex items-center gap-1.5">
-                                    <Users className="w-3.5 h-3.5 text-neutral-400" />
-                                    <span>ظرفیت: تا {toPersianDigits(room.capacity)} میهمان</span>
-                                  </span>
-                                </div>
-
-                                {/* بخش ویژه: تجارب مشمول در این سوئیت */}
-                                <div className="space-y-1.5">
-                                  <div className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1">
-                                    <Sparkles className="w-3 h-3 text-amber-400" />
-                                    <span>تجارب مشمول در این پکیج سوئیت:</span>
-                                  </div>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {includedExperiences.map((exp, idx) => (
-                                      <span
-                                        key={idx}
-                                        className="text-[11px] px-2.5 py-1 rounded-xl bg-amber-400/10 text-amber-300 border border-amber-400/25"
-                                      >
-                                        {exp}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* قیمت هر شب و انتخاب */}
-                            <div className="p-4 sm:p-5 pt-0 flex items-center justify-between border-t border-neutral-800/80 mt-2">
-                              <div>
-                                <div className="text-[11px] text-neutral-400">نرخ هر شب اقامت:</div>
-                                <div className="text-sm sm:text-base font-bold text-amber-300">
-                                  {formatPersianPrice(room.pricePerNight)}
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                disabled={isBooked}
-                                onClick={() => !isBooked && setSelectedRoom(room)}
-                                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                  isSelected
-                                    ? 'bg-amber-400 text-neutral-950 font-black shadow-lg shadow-amber-400/20'
-                                    : isBooked
-                                    ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
-                                    : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white'
-                                }`}
-                              >
-                                {isSelected ? 'انتخاب شده ✓' : isBooked ? 'تکمیل ظرفیت' : 'انتخاب این سوئیت'}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* ۲. نمایش کارت‌های تجارب و تفریحات مستقل (رستوران، کافه، اسپا، کلاب ساحلی) */}
-                  {bookingCategory === 'experience' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      {standaloneExperiences.map((pkg) => {
-                        const isSelected = selectedExperienceId === pkg.id;
-
-                        return (
-                          <div
-                            key={pkg.id}
-                            onClick={() => setSelectedExperienceId(pkg.id)}
-                            className={`rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between backdrop-blur-xl ${
-                              isSelected
-                                ? 'bg-black/60 border-amber-400 ring-2 ring-amber-400/40 shadow-2xl shadow-amber-400/10 scale-[1.01]'
-                                : 'bg-black/45 border-white/10 hover:border-amber-400/40 cursor-pointer hover:shadow-xl'
-                            }`}
-                          >
-                            <div>
-                              {/* تصویر کاور تجربه و دکمه پیش‌نمایش ویدیویی */}
-                              <div className="relative h-48 sm:h-52 w-full overflow-hidden">
-                                <img
-                                  src={pkg.coverImageUrl}
-                                  alt={pkg.title}
-                                  referrerPolicy="no-referrer"
-                                  className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent" />
-
-                                {/* بج طبقه / مکان */}
-                                <div className="absolute top-3 right-3">
-                                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-400 text-neutral-950 backdrop-blur-md shadow-md">
-                                    طبقه {pkg.floorCode}
-                                  </span>
-                                </div>
-
-                                {/* دکمه پخش پیش‌نمایش ویدیویی */}
-                                <div className="absolute top-3 left-3">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onPreviewExperience?.(pkg.includedNodeIds[0] || 'dining');
-                                    }}
-                                    className="px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/90 border border-amber-400/50 hover:border-amber-400 text-amber-300 hover:text-amber-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xl active:scale-95 cursor-pointer backdrop-blur-md"
-                                    title="مشاهده سکانس ویدیویی این تجربه"
-                                  >
-                                    <Play className="w-3.5 h-3.5 fill-current" />
-                                    <span>مشاهده تجربه ویدیویی</span>
-                                  </button>
-                                </div>
-
-                                <div className="absolute bottom-3 right-3 left-3 text-right">
-                                  <span className="text-xs text-amber-300 font-semibold block drop-shadow-sm">
-                                    {pkg.tagline}
-                                  </span>
-                                  <h3 className="text-base sm:text-lg font-bold text-white drop-shadow-md">
-                                    {pkg.title}
-                                  </h3>
-                                </div>
-                              </div>
-
-                              {/* توضیحات و امکانات تجربه */}
-                              <div className="p-4 sm:p-5 space-y-3">
-                                <p className="text-xs text-neutral-300 leading-relaxed line-clamp-2">
-                                  {pkg.description}
-                                </p>
-
-                                <div className="flex flex-wrap gap-1.5 pt-1">
-                                  {pkg.amenities.map((amenity, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="text-[11px] px-2.5 py-1 rounded-xl bg-neutral-800/80 text-neutral-300 border border-neutral-700/60"
-                                    >
-                                      {amenity}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* قیمت و انتخاب تجربه */}
-                            <div className="p-4 sm:p-5 pt-0 flex items-center justify-between border-t border-neutral-800/80 mt-2">
-                              <div>
-                                <div className="text-[11px] text-neutral-400">هزینه رزرو ({pkg.priceUnit}):</div>
-                                <div className="text-sm sm:text-base font-bold text-amber-300">
-                                  {formatPersianPrice(pkg.price)}
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => setSelectedExperienceId(pkg.id)}
-                                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                  isSelected
-                                    ? 'bg-amber-400 text-neutral-950 font-black shadow-lg shadow-amber-400/20'
-                                    : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white'
-                                }`}
-                              >
-                                {isSelected ? 'انتخاب شده ✓' : 'انتخاب این تجربه'}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* =====================================================================
-                  مرحله ۲: تقویم شمسی جلالی مدرن، ساعات ورود و خروج، تعداد مسافران
-                  ===================================================================== */}
-              {currentStep === 2 && (
-                <div className="space-y-6">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white mb-1.5 flex items-center gap-2">
-                      <CalendarIcon className="w-6 h-6 text-amber-400" />
-                      <span>تقویم جلالی و زمان‌بندی اقامت</span>
-                    </h2>
-                    <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed">
-                      بازه ورود و خروج خود را روی تقویم شمسی برگزینید. تعداد شب‌ها و قیمت به طور زنده محاسبه می‌شوند.
-                    </p>
-                  </div>
-
-                  {/* کامپوننت مدرن تقویم جلالی */}
-                  <ModernJalaliCalendar
-                    startDate={startDate}
-                    endDate={endDate}
-                    startTime={startTime}
-                    endTime={endTime}
-                    onDateChange={(s, e) => {
-                      setStartDate(s);
-                      setEndDate(e);
-                    }}
-                    onTimeChange={(s, e) => {
-                      setStartTime(s);
-                      setEndTime(e);
-                    }}
-                  />
-
-                  {/* تعداد مسافران و مناسبت اقامت */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                    <CustomSelect
-                      label="تعداد میهمانان گرامی:"
-                      value={guestCount}
-                      onChange={setGuestCount}
-                      options={[
-                        { value: '1', label: `۱ میهمان (اقامت اختصاصی انفرادی)` },
-                        { value: '2', label: `۲ میهمان (اقامت دو نفره لوکس)` },
-                        { value: '3', label: `۳ میهمان` },
-                        { value: '4', label: `۴ میهمان (سوئیت‌های خانوادگی)` },
-                        { value: '6', label: `هیئت همراه و دیپلماتیک (تا ۶ نفر)` },
-                      ]}
-                    />
-
-                    <CustomSelect
-                      label="هدف یا مناسبت اقامت تشریفاتی:"
-                      value={stayPurpose}
-                      onChange={setStayPurpose}
-                      options={[
-                        { value: 'تعطیلات و آرامش تشریفاتی', label: 'تعطیلات و آرامش تشریفاتی' },
-                        { value: 'ماه عسل و سالگرد ازدواج', label: 'ماه عسل و سالگرد ازدواج' },
-                        { value: 'سفر کاری و مذاکرات تجاری VIP', label: 'سفر کاری و مذاکرات تجاری VIP' },
-                        { value: 'مراسم خصوصی و جشن خانوادگی', label: 'مراسم خصوصی و جشن خانوادگی' },
-                      ]}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* =====================================================================
-                  مرحله ۳: خدمات VIP کانسیرژ و مشخصات میهمان
-                  ===================================================================== */}
-              {currentStep === 3 && (
-                <div className="space-y-6">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white mb-1.5 flex items-center gap-2">
-                      <Sparkles className="w-6 h-6 text-amber-400" />
-                      <span>خدمات ویژه کانسیرژ و مشخصات سرپرست اقامت</span>
-                    </h2>
-                    <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed">
-                      می‌توانید خدمات تشریفاتی اختصاصی قصر را برای اقامت خود فعال فرمایید. واچر رسمی الکترونیکی به نام سرپرست صادر خواهد شد.
-                    </p>
-                  </div>
-
-                  {/* پکیج‌های تشریفاتی */}
-                  <div className="space-y-3">
-                    <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4" />
-                      <span>خدمات اختیاری تشریفات اختصاصی قصر:</span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                      {VIP_SERVICES.map((service) => {
-                        const isChecked = selectedVipServices.includes(service.id);
-                        return (
-                          <div
-                            key={service.id}
-                            onClick={() => toggleVipService(service.id)}
-                            className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3.5 backdrop-blur-xl ${
-                              isChecked
-                                ? 'bg-amber-400/15 border-amber-400 ring-1 ring-amber-400/30'
-                                : 'bg-black/45 border-white/10 hover:border-neutral-600'
-                            }`}
-                          >
-                            <div
-                              className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 border ${
-                                isChecked
-                                  ? 'bg-amber-400 border-amber-400 text-neutral-950 font-black'
-                                  : 'border-neutral-600 bg-black/60'
-                              }`}
-                            >
-                              {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                            </div>
-
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs sm:text-sm font-bold text-white">{service.title}</span>
-                                <span className="text-xs text-amber-300 font-bold">
-                                  +{formatPersianPrice(service.price)}
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
-                                {service.description}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* فرم اطلاعات سرپرست اقامت */}
-                  <div className="bg-black/50 border border-white/10 rounded-3xl p-5 sm:p-6 space-y-4 backdrop-blur-xl">
-                    <div className="text-xs font-bold text-white flex items-center gap-1.5 border-b border-white/10 pb-2.5">
-                      <User className="w-4 h-4 text-amber-400" />
-                      <span>مشخصات سرپرست رزرو و گیرنده واچر رسمی:</span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <CustomInput
-                        label="نام و نام خانوادگی میهمان اصلی:"
-                        placeholder="مثال: دکتر علیرضا صدری"
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        startIcon={<User className="w-4 h-4" />}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {SUITES.map((suite) => {
+                const isSelected = selectedSuite.id === suite.id;
+                return (
+                  <div
+                    key={suite.id}
+                    onClick={() => setSelectedSuite(suite)}
+                    className={`group rounded-2xl overflow-hidden border transition-all duration-300 cursor-pointer flex flex-col ${
+                      isSelected
+                        ? 'border-amber-400 bg-neutral-900/90 shadow-2xl shadow-amber-400/10 ring-1 ring-amber-400'
+                        : 'border-white/10 bg-neutral-900/50 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="relative h-48 overflow-hidden">
+                      <img
+                        src={suite.image}
+                        alt={suite.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                       />
-
-                      <CustomInput
-                        label="شماره تلفن همراه (جهت هماهنگی ترانسفر):"
-                        placeholder="۰۹۱۲۳۴۵۶۷۸۹"
-                        value={guestPhone}
-                        onChange={(e) => setGuestPhone(e.target.value)}
-                        startIcon={<Phone className="w-4 h-4" />}
-                      />
-                    </div>
-
-                    <CustomInput
-                      label="پست الکترونیکی (جهت ارسال واچر رسمی):"
-                      type="email"
-                      placeholder="a.sadri@vip-sanctuary.com"
-                      value={guestEmail}
-                      onChange={(e) => setGuestEmail(e.target.value)}
-                      startIcon={<Mail className="w-4 h-4" />}
-                    />
-
-                    <CustomInput
-                      label="درخواست‌های اختصاصی (رژیم غذایی خاص، ترتیبات گل‌آرایی):"
-                      placeholder="هرگونه یادداشت برای سرپیشخدمت ارشد اقامتگاه..."
-                      value={specialRequests}
-                      onChange={(e) => setSpecialRequests(e.target.value)}
-                      startIcon={<FileText className="w-4 h-4" />}
-                    />
-                  </div>
-
-                  
-                </div>
-              )}
-
-              {/* =====================================================================
-                  مرحله ۴: پیش‌فاکتور و تسویه شبیه‌سازی‌شده (Verification & Sandbox Payment)
-                  ===================================================================== */}
-              {currentStep === 4 && (
-                <div className="space-y-6">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white mb-1.5 flex items-center gap-2">
-                      <CreditCard className="w-6 h-6 text-amber-400" />
-                      <span>پیش‌فاکتور نهایی و تسویه شبیه‌ساز امن</span>
-                    </h2>
-                    <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed">
-                      کلیه جزییات اقامتگاه، مدت زمان و خدمات را بررسی فرمایید. این درگاه یک شبیه‌ساز تست است و نیازی به کارت واقعی نیست.
-                    </p>
-                  </div>
-
-                  {/* پیش‌فاکتور شفاف */}
-                  <div className="bg-black/50 border border-white/10 rounded-3xl p-5 sm:p-6 space-y-3.5 backdrop-blur-xl">
-                    <div className="flex items-center justify-between text-xs sm:text-sm text-neutral-300 border-b border-white/10 pb-3">
-                      <span>
-                        {bookingCategory === 'suite'
-                          ? `${selectedRoom?.title} (${toPersianDigits(totalNights)} شب اقامت)`
-                          : `${selectedExperience?.title} (${selectedExperience?.priceUnit === 'هر نفر' ? `${toPersianDigits(guestCount)} نفر` : 'رزرو اختصاصی'})`
-                        }
-                      </span>
-                      <span className="font-bold text-white">{formatPersianPrice(roomCostTotal)}</span>
-                    </div>
-
-                    {selectedVipServices.length > 0 && (
-                      <div className="flex items-center justify-between text-xs sm:text-sm text-neutral-300 border-b border-white/10 pb-3">
-                        <span>خدمات تشریفاتی VIP ({toPersianDigits(selectedVipServices.length)} مورد)</span>
-                        <span className="font-bold text-white">{formatPersianPrice(vipServicesTotal)}</span>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between text-xs text-neutral-400 border-b border-white/10 pb-3">
-                      <span>مالیات بر ارزش افزوده و حق سرویس تشریفات ({toPersianDigits(9)}٪)</span>
-                      <span>{formatPersianPrice(taxesAndService)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2">
-                      <span className="text-sm sm:text-base font-bold text-white">مبلغ کل قابل تسویه:</span>
-                      <span className="text-lg sm:text-xl font-black text-amber-400">
-                        {formatPersianPrice(grandTotal)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* انتخاب درگاه پرداخت رسمی شاپرک (بانک ملت، سامان، سداد، زرین‌پال) */}
-                  <div className="bg-black/60 border border-amber-400/50 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6 backdrop-blur-xl relative overflow-hidden">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400">
-                          <Lock className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <span className="text-sm font-bold text-white block">انتخاب درگاه پرداخت الکترونیک شاپرک</span>
-                          <span className="text-[11px] text-neutral-400">انتقال امن به صفحه رسمی درگاه بانکی با نظارت بانک مرکزی</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-xl w-fit">
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>پروتکل امن SSL ۲۵۶ بیتی</span>
+                      <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-transparent to-transparent" />
+                      <div className="absolute bottom-3 right-3 left-3 flex justify-between items-end">
+                        <span className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-[11px] text-amber-300 border border-white/10">
+                          {suite.area}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-full bg-amber-400/90 text-neutral-950 text-xs font-bold">
+                          {suite.price} / شب
+                        </span>
                       </div>
                     </div>
 
-                    {/* لیست درگاه‌های بانکی معتبر */}
-                    <div className="space-y-3">
-                      <span className="text-xs text-neutral-300 font-semibold block">
-                        درگاه پرداخت معتبر مورد نظر خود را انتخاب نمایید:
-                      </span>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {[
-                          {
-                            id: 'mellat',
-                            name: 'به‌پرداخت ملت',
-                            desc: 'شبکه پرداخت رسمی بانک ملت',
-                            badge: 'پایدار و پرسرعت',
-                            color: 'border-rose-500/40 text-rose-400',
-                          },
-                          {
-                            id: 'saman',
-                            name: 'پرداخت الکترونیک سامان (سپ)',
-                            desc: 'درگاه ویژه کارت‌های شتاب بانک سامان',
-                            badge: 'اتصال مستقیم',
-                            color: 'border-cyan-500/40 text-cyan-400',
-                          },
-                          {
-                            id: 'sadad',
-                            name: 'سداد (بانک ملی ایران)',
-                            desc: 'سامانه الکترونیکی پرداخت داده‌ها',
-                            badge: 'امنیت شاپرک',
-                            color: 'border-amber-500/40 text-amber-400',
-                          },
-                          {
-                            id: 'zarinpal',
-                            name: 'زرین‌پال VIP',
-                            desc: 'درگاه پرداخت تاییدشده با تسویه آنی',
-                            badge: 'پشتیبانی ۲۴ ساعته',
-                            color: 'border-emerald-500/40 text-emerald-400',
-                          },
-                        ].map((gw) => {
-                          const isSelected = selectedGateway === gw.id;
-                          return (
-                            <div
-                              key={gw.id}
-                              onClick={() => setSelectedGateway(gw.id as any)}
-                              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                                isSelected
-                                  ? 'bg-amber-400/15 border-amber-400 ring-2 ring-amber-400/40 shadow-xl'
-                                  : 'bg-neutral-950/60 border-neutral-800 hover:border-neutral-700'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                                  isSelected ? 'border-amber-400 bg-amber-400 text-neutral-950' : 'border-neutral-600'
-                                }`}>
-                                  {isSelected && <div className="w-2 h-2 rounded-full bg-neutral-950" />}
-                                </div>
-
-                                <div>
-                                  <span className="text-xs font-bold text-white block">{gw.name}</span>
-                                  <span className="text-[10px] text-neutral-400 block mt-0.5">{gw.desc}</span>
-                                </div>
-                              </div>
-
-                              <span className={`text-[10px] px-2 py-0.5 rounded-lg border font-mono ${gw.color}`}>
-                                {gw.badge}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* توضیحات اعتمادسازی و شفافیت شاپرک */}
-                    <div className="p-4 rounded-2xl bg-neutral-950/70 border border-neutral-800/80 text-xs text-neutral-300 space-y-2 leading-relaxed">
-                      <div className="flex items-center gap-2 text-amber-300 font-bold">
-                        <Lock className="w-4 h-4" />
-                        <span>انتقال مستقیم به سامانه الکترونیکی پرداخت کارت (شاپرک)</span>
-                      </div>
-                      <p className="text-[11px] text-neutral-400">
-                        با کلیک بر روی دکمه زیر، مستقیماً به درگاه پرداخت رسمی بانک هدایت خواهید شد. هیچ‌گونه اطلاعات کارت یا رمز دوم در این وب‌سایت وارد یا ذخیره نمی‌گردد و پس از اتمام پرداخت، به صورت خودکار به همین صفحه بازگردانده شده و واچر رسمی اقامتگاه با شماره پیگیری یکتا صادر می‌گردد.
-                      </p>
-                    </div>
-
-                    {/* دکمه انتقال به درگاه پرداخت */}
-                    <CustomButton
-                      fullWidth
-                      size="lg"
-                      variant="primary"
-                      isLoading={isProcessingPayment}
-                      onClick={handleExecutePayment}
-                      className="shadow-[0_0_30px_rgba(251,191,36,0.4)]"
-                    >
-                      <span>انتقال به درگاه پرداخت اینترنتی شاپرک</span>
-                    </CustomButton>
-
-                    {/* وضعیت ریدایرکت شبیه‌سازی‌شده */}
-                    {isRedirectingToBank && (
-                      <div className="absolute inset-0 bg-neutral-950/95 backdrop-blur-xl z-30 flex flex-col items-center justify-center p-6 text-center space-y-4 animate-in fade-in">
-                        <div className="w-16 h-16 rounded-full border-4 border-amber-400 border-t-transparent animate-spin flex items-center justify-center" />
-                        <div className="space-y-1">
-                          <h4 className="text-base font-bold text-white">در حال انتقال امن به درگاه شاپرک...</h4>
-                          <p className="text-xs text-neutral-400">
-                            در حال ایجاد نشست امن و احراز فاکتور رسمی اقامتگاه قصر لورا
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <button
-                      type="button"
-                      onClick={goToPrevStep}
-                      className="px-4 py-2 text-xs text-neutral-400 hover:text-white flex items-center gap-1 cursor-pointer"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                      <span>بازگشت به خدمات</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* =====================================================================
-                  مرحله ۵: واچر رسمی الکترونیکی با کیوآرکد و کلید دیجیتال
-                  ===================================================================== */}
-              {currentStep === 5 && (
-                <div className="space-y-6 py-4">
-                  <div className="text-center space-y-3">
-                    <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 mx-auto flex items-center justify-center shadow-xl shadow-emerald-500/20">
-                      <CheckCircle2 className="w-8 h-8" />
-                    </div>
-                    <h2 className="text-2xl sm:text-3xl font-black text-white">
-                      اقامت تشریفاتی شما با موفقیت رزرو گردید
-                    </h2>
-                    <p className="text-xs sm:text-sm text-neutral-300 max-w-lg mx-auto leading-relaxed">
-                      واچر رسمی اقامتگاه پنج ستاره قصر لورا صادر شد و کلید هوشمند دیجیتال فعال گردید.
-                    </p>
-                  </div>
-
-                  {/* برگه واچر رسمی */}
-                  <div className="bg-neutral-950 border-2 border-amber-400/60 rounded-3xl p-6 sm:p-8 shadow-2xl relative space-y-5">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-5">
+                    <div className="p-5 flex-1 flex flex-col justify-between">
                       <div>
-                        <span className="text-[11px] text-amber-400 tracking-widest uppercase font-bold">
-                          Official Luxury Reservation Voucher
-                        </span>
-                        <h3 className="text-xl font-bold text-white mt-1">
-                          واچر رسمی اقامتگاه پنج ستاره قصر لورا
-                        </h3>
-                      </div>
+                        <h3 className="text-lg font-bold text-white mb-1">{suite.title}</h3>
+                        <p className="text-xs text-amber-200/80 mb-3">{suite.view}</p>
 
-                      {/* کد رهگیری یکتا با ارقام فارسی */}
-                      <div className="bg-neutral-900 border border-neutral-700 px-4 py-2 rounded-2xl flex items-center gap-2.5">
-                        <span className="text-xs text-neutral-400">کد رهگیری:</span>
-                        <span className="font-mono text-sm sm:text-base font-black text-amber-300">
-                          {toPersianDigits(generatedTrackingCode)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleCopyCode}
-                          className="p-1.5 text-neutral-400 hover:text-white cursor-pointer"
-                          title="کپی کد رهگیری"
-                        >
-                          {copiedCode ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* مشخصات واچر */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-xs sm:text-sm">
-                      <div className="space-y-3">
-                        <div>
-                          <span className="text-neutral-500 block text-xs">نام میهمان عالی‌رتبه:</span>
-                          <span className="text-white font-bold text-sm sm:text-base">{guestName || 'میهمان عالی‌رتبه قصر'}</span>
-                        </div>
-                        <div>
-                          <span className="text-neutral-500 block text-xs">
-                            {bookingCategory === 'suite' ? 'اقامتگاه انتخابی:' : 'تجربه انتخابی:'}
-                          </span>
-                          <span className="text-amber-300 font-bold">
-                            {bookingCategory === 'suite' ? selectedRoom?.title : selectedExperience?.title}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-neutral-500 block text-xs">تعداد میهمانان:</span>
-                          <span className="text-neutral-200">{toPersianDigits(guestCount)} نفر</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div>
-                          <span className="text-neutral-500 block text-xs">تاریخ و ساعت تحویل (Check-in):</span>
-                          <span className="text-white font-semibold">{toPersianDigits(startDate)} &bull; ساعت {startTime}</span>
-                        </div>
-                        <div>
-                          <span className="text-neutral-500 block text-xs">تاریخ و ساعت ترخیص (Check-out):</span>
-                          <span className="text-white font-semibold">{toPersianDigits(endDate)} &bull; ساعت {endTime}</span>
-                        </div>
-                        <div>
-                          <span className="text-neutral-500 block text-xs">مبلغ کل تسویه شده:</span>
-                          <span className="text-emerald-400 font-black text-base">{formatPersianPrice(grandTotal)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* بخش کلید دیجیتال و QR Code */}
-                    <div className="pt-4 border-t border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div className="flex items-center gap-3.5">
-                        <div className="p-2.5 bg-white rounded-2xl shadow-lg shrink-0">
-                          <QrCode className="w-12 h-12 text-neutral-950" />
-                        </div>
-                        <div className="text-xs text-neutral-400 leading-relaxed">
-                          <span>جهت تحویل کلید هوشمند سوئیت و ترانسفر، این کیوآرکد را هنگام ورود به کانسیرژ هتل ارائه فرمایید.</span>
+                        <div className="space-y-1.5 mb-4">
+                          {suite.features.map((f, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs text-neutral-400">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>{f}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
 
                       <button
-                        type="button"
-                        onClick={() => alert('واچر رسمی الکترونیکی هتل قصر لورا با موفقیت ذخیره گردید.')}
-                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-neutral-900 hover:bg-neutral-800 text-xs font-bold text-neutral-200 cursor-pointer transition-colors border border-neutral-800"
+                        className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all ${
+                          isSelected
+                            ? 'bg-amber-400 text-neutral-950'
+                            : 'bg-white/5 text-neutral-300 group-hover:bg-white/10'
+                        }`}
                       >
-                        <Download className="w-4 h-4 text-amber-400" />
-                        <span>دانلود واچر رسمی PDF</span>
+                        {isSelected ? 'انتخاب شده ✓' : 'انتخاب این سوئیت'}
                       </button>
                     </div>
                   </div>
+                );
+              })}
+            </div>
 
-                  <div className="flex justify-center pt-4">
-                    <CustomButton
-                      size="lg"
-                      variant="primary"
-                      onClick={onBackToExperience}
+            <div className="flex justify-end pt-4">
+              <button
+                onClick={handleNext}
+                className="px-8 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-sm shadow-xl shadow-amber-400/20 transition-all cursor-pointer"
+              >
+                ادامه و تعیین تاریخ اقامت &larr;
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Date & Nights */}
+        {currentStep === 2 && (
+          <div className="space-y-6 max-w-2xl mx-auto">
+            <div className="text-center mb-8">
+              <span className="text-xs uppercase tracking-widest text-amber-400 font-semibold">مرحله دوم</span>
+              <h2 className="text-2xl sm:text-3xl font-black text-white mt-1 mb-2">مدت زمان اقامت و تعداد مهمانان</h2>
+              <p className="text-xs sm:text-sm text-neutral-400">تاریخ حضور خود را در هتل قصر لورا تعیین فرمایید.</p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-neutral-900/60 border border-white/10 space-y-6">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-300 mb-2">تعداد شب‌های اقامت</label>
+                <div className="grid grid-cols-4 gap-3">
+                  {[1, 2, 3, 5, 7, 10, 14, 21].map((nights) => (
+                    <button
+                      key={nights}
+                      onClick={() => setStayNights(nights)}
+                      className={`py-3 rounded-xl text-xs font-bold transition-all border ${
+                        stayNights === nights
+                          ? 'bg-amber-400 border-amber-400 text-neutral-950 shadow-lg shadow-amber-400/20'
+                          : 'bg-neutral-800/40 border-white/5 text-neutral-400 hover:border-white/15'
+                      }`}
                     >
-                      تکمیل و بازگشت به تور ویدیویی هتل
-                    </CustomButton>
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* =========================================================================
-            ستون چپ (در دسکتاپ): سایدبار خلاصه رزرو چسبان (Sticky Summary Card)
-            ========================================================================= */}
-        {currentStep < 5 && (
-          <aside className="w-full lg:w-80 shrink-0 sticky top-20 space-y-4">
-            <div className="bg-black/50 border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4 backdrop-blur-xl">
-              <h3 className="text-xs font-bold text-amber-300 uppercase tracking-wider border-b border-white/10 pb-3 flex items-center justify-between">
-                <span>خلاصه اقامت شما</span>
-                <span className="text-neutral-400 font-normal">{toPersianDigits(totalNights)} شب</span>
-              </h3>
-
-              {/* تصویر و عنوان سوئیت یا تجربه */}
-              <div className="flex items-center gap-3">
-                <img
-                  src={bookingCategory === 'suite' ? selectedRoom?.imageUrl : selectedExperience?.coverImageUrl}
-                  alt={bookingCategory === 'suite' ? selectedRoom?.title : selectedExperience?.title}
-                  referrerPolicy="no-referrer"
-                  className="w-16 h-16 rounded-2xl object-cover border border-white/10 shrink-0"
-                />
-                <div>
-                  <h4 className="text-xs font-bold text-white line-clamp-1">
-                    {autoPersianText(bookingCategory === 'suite' ? selectedRoom?.title : selectedExperience?.title)}
-                  </h4>
-                  <div className="text-[11px] text-amber-300 font-semibold mt-0.5">
-                    {bookingCategory === 'suite'
-                      ? `${formatPersianPrice(selectedRoom?.pricePerNight || 0)} / شب`
-                      : `${formatPersianPrice(selectedExperience?.price || 0)} (${selectedExperience?.priceUnit})`}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">
-                    {bookingCategory === 'suite'
-                      ? `ظرفیت: ${toPersianDigits(selectedRoom?.capacity)} میهمان`
-                      : `طبقه: ${selectedExperience?.floorCode || 'G'}`}
-                  </div>
+                      {nights} شب
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* تاریخ و ساعت اقامت */}
-              <div className="bg-black/60 p-3.5 rounded-2xl border border-white/10 text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">ورود:</span>
-                  <span className="text-white font-semibold">{toPersianDigits(startDate)} &bull; {startTime}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">خروج:</span>
-                  <span className="text-white font-semibold">{toPersianDigits(endDate)} &bull; {endTime}</span>
-                </div>
-                <div className="flex items-center justify-between pt-1 border-t border-white/10">
-                  <span className="text-neutral-400">میهمانان:</span>
-                  <span className="text-neutral-200">{toPersianDigits(guestCount)} نفر</span>
-                </div>
-              </div>
-
-              {/* سرویس‌های انتخابی */}
-              {selectedVipServices.length > 0 && (
-                <div className="text-xs space-y-1.5 border-t border-white/10 pt-3">
-                  <span className="text-neutral-400 block mb-1">خدمات تشریفاتی VIP:</span>
-                  {selectedVipServices.map((id) => {
-                    const s = VIP_SERVICES.find((v) => v.id === id);
-                    return (
-                      <div key={id} className="flex items-center justify-between text-[11px] text-neutral-300">
-                        <span className="line-clamp-1">{s?.title}</span>
-                        <span className="text-amber-300 font-semibold shrink-0">+{formatPersianPrice(s?.price || 0)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* مجموع کل */}
-              <div className="border-t border-white/10 pt-3 flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] text-neutral-400 block">مبلغ کل قابل پرداخت:</span>
-                  <span className="text-base font-black text-amber-400">{formatPersianPrice(grandTotal)}</span>
+              <div>
+                <label className="block text-xs font-semibold text-neutral-300 mb-2">تعداد مهمانان گرامی</label>
+                <div className="grid grid-cols-4 gap-3">
+                  {[1, 2, 3, 4].map((guests) => (
+                    <button
+                      key={guests}
+                      onClick={() => setGuestCount(guests)}
+                      className={`py-3 rounded-xl text-xs font-bold transition-all border ${
+                        guestCount === guests
+                          ? 'bg-amber-400 border-amber-400 text-neutral-950 shadow-lg shadow-amber-400/20'
+                          : 'bg-neutral-800/40 border-white/5 text-neutral-400 hover:border-white/15'
+                      }`}
+                    >
+                      {guests} نفر
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
-          </aside>
+
+            <div className="flex justify-between pt-4">
+              <button
+                onClick={handlePrev}
+                className="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 text-xs font-medium"
+              >
+                مرحله قبل
+              </button>
+              <button
+                onClick={handleNext}
+                className="px-8 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-sm shadow-xl shadow-amber-400/20"
+              >
+                ادامه به خدمات VIP &larr;
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: VIP Concierge Add-ons */}
+        {currentStep === 3 && (
+          <div className="space-y-6 max-w-2xl mx-auto">
+            <div className="text-center mb-8">
+              <span className="text-xs uppercase tracking-widest text-amber-400 font-semibold">مرحله سوم</span>
+              <h2 className="text-2xl sm:text-3xl font-black text-white mt-1 mb-2">خدمات اختصاصی تشریفات و کانسیرژ</h2>
+              <p className="text-xs sm:text-sm text-neutral-400">اقامت خود را با تشریفات اختصاصی به یادماندنی‌تر سازید.</p>
+            </div>
+
+            <div className="space-y-3">
+              {VIP_SERVICES.map((serv) => {
+                const isSelected = selectedServices.includes(serv.id);
+                const Icon = serv.icon;
+                return (
+                  <div
+                    key={serv.id}
+                    onClick={() => toggleService(serv.id)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                      isSelected
+                        ? 'bg-amber-400/10 border-amber-400/50 text-white shadow-lg'
+                        : 'bg-neutral-900/40 border-white/10 text-neutral-300 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSelected ? 'bg-amber-400 text-neutral-950' : 'bg-white/5 text-amber-400'}`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-white">{serv.title}</div>
+                        <div className="text-xs text-amber-300/80 font-mono mt-0.5">{serv.price}</div>
+                      </div>
+                    </div>
+                    <div className={`w-6 h-6 rounded-lg border flex items-center justify-center ${isSelected ? 'bg-amber-400 border-amber-400 text-neutral-950' : 'border-white/20'}`}>
+                      {isSelected && <CheckCircle2 className="w-4 h-4" />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-between pt-4">
+              <button
+                onClick={handlePrev}
+                className="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 text-xs font-medium"
+              >
+                مرحله قبل
+              </button>
+              <button
+                onClick={handleNext}
+                className="px-8 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-sm shadow-xl shadow-amber-400/20"
+              >
+                مشخصات مهمان &larr;
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Guest Information */}
+        {currentStep === 4 && (
+          <div className="space-y-6 max-w-2xl mx-auto">
+            <div className="text-center mb-8">
+              <span className="text-xs uppercase tracking-widest text-amber-400 font-semibold">مرحله چهارم</span>
+              <h2 className="text-2xl sm:text-3xl font-black text-white mt-1 mb-2">اطلاعات سرپرست اقامت</h2>
+              <p className="text-xs sm:text-sm text-neutral-400">جهت صدور واچر رسمی و هماهنگی تیم تشریفات.</p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-neutral-900/60 border border-white/10 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">نام و نام‌خانوادگی</label>
+                <input
+                  type="text"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-neutral-950 border border-white/10 focus:border-amber-400 text-sm text-white focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">شماره تماس مستقیم</label>
+                <input
+                  type="text"
+                  value={guestPhone}
+                  onChange={(e) => setGuestPhone(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-neutral-950 border border-white/10 focus:border-amber-400 text-sm text-white focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">درخواست‌های ویژه یا رژیم‌های غذایی</label>
+                <textarea
+                  rows={3}
+                  value={guestNotes}
+                  onChange={(e) => setGuestNotes(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-neutral-950 border border-white/10 focus:border-amber-400 text-sm text-white focus:outline-none resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-between pt-4">
+              <button
+                onClick={handlePrev}
+                className="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 text-xs font-medium"
+              >
+                مرحله قبل
+              </button>
+              <button
+                onClick={handleNext}
+                className="px-8 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-sm shadow-xl shadow-amber-400/20"
+              >
+                تایید نهایی و صدور واچر &larr;
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: Final Voucher Confirmation */}
+        {currentStep === 5 && (
+          <div className="max-w-xl mx-auto space-y-6 text-center animate-fade-in">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto mb-2">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+
+            <h2 className="text-2xl sm:text-3xl font-black text-white">واچر رزرواسیون با موفقیت صادر شد</h2>
+            <p className="text-xs sm:text-sm text-neutral-400 max-w-md mx-auto">
+              تیم کانسیرژ اختصاصی قصر لورا ظرف حداکثر ۱۵ دقیقه جهت نهایی‌سازی پروتکل ورود با شما تماس خواهند گرفت.
+            </p>
+
+            <div className="p-6 rounded-2xl bg-neutral-900/80 border border-amber-400/30 text-right space-y-4 shadow-2xl">
+              <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                <span className="text-xs text-neutral-400">کد پیگیری تشریفات:</span>
+                <span className="font-mono text-amber-300 text-sm font-bold">LP-9824-ROYAL</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                <span className="text-xs text-neutral-400">سوئیت انتخابی:</span>
+                <span className="text-white text-sm font-bold">{selectedSuite.title}</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                <span className="text-xs text-neutral-400">مدت اقامت:</span>
+                <span className="text-white text-sm">{stayNights} شب ({guestCount} مهمان)</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-neutral-400">سرپرست اقامت:</span>
+                <span className="text-white text-sm">{guestName}</span>
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <button
+                onClick={onBackToExperience}
+                className="px-8 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-sm shadow-xl shadow-amber-400/20 transition-all cursor-pointer"
+              >
+                بازگشت به گشت سینمایی هتل (Esc)
+              </button>
+            </div>
+          </div>
         )}
       </main>
-
-      {/* =========================================================================
-          نوار اکشن فیکس موبایل (Fixed Thumb Zone Bar for Mobile)
-          دسترسی راحت با شست دست در گوشی‌های هوشمند
-          ========================================================================= */}
-      {currentStep < 5 && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-black/80 backdrop-blur-2xl border-t border-white/10 px-4 py-3 shadow-[0_-5px_25px_rgba(0,0,0,0.8)] flex items-center justify-between gap-3">
-          <div>
-            <span className="text-[10px] text-neutral-400 block">مبلغ قابل پرداخت ({toPersianDigits(totalNights)} شب):</span>
-            <span className="text-sm font-black text-amber-300">{formatPersianPrice(grandTotal)}</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {currentStep > 1 && (
-              <button
-                type="button"
-                onClick={goToPrevStep}
-                className="px-3 py-2 rounded-xl bg-black/60 border border-white/20 text-neutral-300 text-xs font-semibold cursor-pointer active:scale-95"
-              >
-                قبل
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={goToNextStep}
-              className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-black shadow-lg shadow-amber-400/25 flex items-center gap-1.5 cursor-pointer active:scale-95"
-            >
-              <span>{currentStep === 4 ? 'پرداخت و صدور واچر' : 'گام بعدی'}</span>
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
