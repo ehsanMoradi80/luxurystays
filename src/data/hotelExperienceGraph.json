@@ -1,192 +1,165 @@
 {
   "id": "hotel-laura-palace-main",
   "name": "هتل قصر لورا",
+  "hotelName": "هتل بین‌المللی قصر لورا",
+  "version": "2.1.0",
   "initialNodeId": "scene-01-entrance",
   "nodes": [
     {
       "id": "scene-01-entrance",
       "title": "Grand Entrance & Royal Lobby",
-      "persianTitle": "ورودی باشکوه و لابی سلطنتی",
-      "subtitle": "شکوه معماری و استقبالی در شأن پادشاهان",
-      "description": "ستون‌های مرمرین، آب‌نمای مرکزی و چلچراغ‌های دست‌ساز با کریستال‌های درخشان و رایحه عود عنبر.",
+      "persianTitle": "لابی سلطنتی",
+      "subtitle": "شکوه معماری مرمر و آب‌نمای مرکزی",
+      "description": "ستون‌های مرمرین و چلچراغ‌های دست‌ساز با کریستال‌های درخشان.",
       "category": "LOBBY",
-      "floorLevel": "طبقه همکف",
+      "floorLevel": "همکف",
       "ambientLoop": {
-        "landscapeUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
-        "posterUrl": "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1920&q=80"
+        "mediaType": "video",
+        "landscapeUrl": "/videos/scene-01-entrance.mp4",
+        "posterUrl": "/tmp/scene-01-entrance.jpg",
+        "durationSeconds": 6
       },
       "transitions": [
         {
           "id": "trans-entrance-to-penthouse",
           "targetNodeId": "scene-02-penthouse",
+          "label": "پنت‌هاوس امپریال",
+          "reverseAllowed": true,
           "video": {
-            "landscapeUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-            "posterUrl": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1920&q=80"
-          },
-          "label": "صعود به پنت‌هاوس رویال",
-          "reverseAllowed": true
+            "mediaType": "video",
+            "landscapeUrl": "/videos/trans-01-to-02.mp4",
+            "posterUrl": "/tmp/trans-01-to-02.jpg",
+            "durationSeconds": 6
+          }
         }
       ],
-      "hotspots": [
-        {
-          "id": "hs-chandelier",
-          "title": "لوستر کریستال بوهمیا",
-          "description": "ساخته شده از ۲۴۰۰ قطعه کریستال تراش‌خورده با روکش طلای ۲۴ عیار.",
-          "category": "AMENITY",
-          "position": { "x": 50, "y": 28 }
-        },
-        {
-          "id": "hs-concierge",
-          "title": "کانسیرژ اختصاصی ۲۴ ساعته",
-          "description": "پاسخگویی به تشریفات، هماهنگی هلیکوپتر و لیموزین اختصاصی مهمانان.",
-          "category": "AMENITY",
-          "position": { "x": 75, "y": 65 }
-        }
-      ],
+      "hotspots": [],
       "audioProfile": {
-        "tone": "welcoming_strings",
-        "volume": 0.6
+        "tone": "zen_sanctuary",
+        "volume": 0.5
       }
     },
     {
       "id": "scene-02-penthouse",
       "title": "The Imperial Ocean Penthouse",
-      "persianTitle": "پنت‌هاوس امپریال رو به اقیانوس",
-      "subtitle": "اقامتگاهی بر فراز ابرها با چشم‌انداز ۳۶۰ درجه",
-      "description": "سوئیت دوبلکس با استخر شیشه‌ای معلق، تراس خصوصی و خدمات سرآشپز اختصاصی ۲۴ ساعته.",
+      "persianTitle": "پنت‌هاوس امپریال",
+      "subtitle": "اقامتگاهی بر فراز ابرها با استخر معلق",
+      "description": "سوئیت دوبلکس با چشم‌انداز اقیانوس و تراس خصوصی.",
       "category": "SUITE",
       "floorLevel": "طبقه ۲۸",
       "ambientLoop": {
-        "landscapeUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-        "posterUrl": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1920&q=80"
+        "mediaType": "video",
+        "landscapeUrl": "/videos/scene-02-penthouse.mp4",
+        "posterUrl": "/tmp/scene-02-penthouse.jpg",
+        "durationSeconds": 6
       },
       "transitions": [
         {
           "id": "trans-penthouse-to-dining",
           "targetNodeId": "scene-03-dining",
+          "label": "رستوران کریستال",
+          "reverseAllowed": true,
           "video": {
-            "landscapeUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-            "posterUrl": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1920&q=80"
-          },
-          "label": "ورود به رستوران ستاره‌دار میشلن",
-          "reverseAllowed": true
+            "mediaType": "video",
+            "landscapeUrl": "/videos/trans-02-to-03.mp4",
+            "posterUrl": "/tmp/trans-02-to-03.jpg",
+            "durationSeconds": 6
+          }
         }
       ],
-      "hotspots": [
-        {
-          "id": "hs-terrace-pool",
-          "title": "استخر معلق اینفینیتی",
-          "description": "آب گرم تنظیم‌شده هوشمند بر فراز خلیج نیلگون با ویوی ابدی غروب.",
-          "category": "AMENITY",
-          "position": { "x": 68, "y": 55 }
-        }
-      ],
+      "hotspots": [],
       "audioProfile": {
-        "tone": "distant_waves",
-        "volume": 0.65
+        "tone": "zen_sanctuary",
+        "volume": 0.55
       }
     },
     {
       "id": "scene-03-dining",
       "title": "Michelin Crystal Dining Room",
-      "persianTitle": "رستوران ستاره‌دار کریستال",
-      "subtitle": "تجربه‌ای منحصربه‌فرد از هنر آشپزی فاخر بین‌المللی",
-      "description": "منوی منتخب سرآشپز برنده سه ستاره میشلن با همراهی نوای زنده پیانو و ویولنسل در فضایی رویایی.",
+      "persianTitle": "رستوران کریستال",
+      "subtitle": "هنر آشپزی فاخر با ستاره میشلن",
+      "description": "منوی منتخب سرآشپز بین‌المللی همراه با نوای زنده پیانو.",
       "category": "DINING",
       "floorLevel": "طبقه ۴",
       "ambientLoop": {
-        "landscapeUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
-        "posterUrl": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1920&q=80"
+        "mediaType": "video",
+        "landscapeUrl": "/videos/scene-03-dining.mp4",
+        "posterUrl": "/tmp/scene-03-dining.jpg",
+        "durationSeconds": 6
       },
       "transitions": [
         {
           "id": "trans-dining-to-spa",
           "targetNodeId": "scene-04-spa",
+          "label": "اسپا لاجوردی",
+          "reverseAllowed": true,
           "video": {
-            "landscapeUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
-            "posterUrl": "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1920&q=80"
-          },
-          "label": "آرامش در اسپا و حمام ترکی لورا",
-          "reverseAllowed": true
+            "mediaType": "video",
+            "landscapeUrl": "/videos/trans-03-to-04.mp4",
+            "posterUrl": "/tmp/trans-03-to-04.jpg",
+            "durationSeconds": 6
+          }
         }
       ],
-      "hotspots": [
-        {
-          "id": "hs-chef-table",
-          "title": "میز اختصاصی سرآشپز",
-          "description": "مشاهده زنده هنر آشپزی و سرو دوره‌های ویژه تست غذا همراه با معرفی سرآشپز.",
-          "category": "DINING",
-          "position": { "x": 42, "y": 60 }
-        }
-      ],
+      "hotspots": [],
       "audioProfile": {
-        "tone": "gentle_piano",
-        "volume": 0.55
+        "tone": "zen_sanctuary",
+        "volume": 0.5
       }
     },
     {
       "id": "scene-04-spa",
       "title": "The Azure Wellness Spa Sanctuary",
-      "persianTitle": "اسپا و حمام سلامتی لاجوردی",
-      "subtitle": "آرامش جان و تن در خلوتگاهی سرشار از سکون و نور",
-      "description": "ماساژهای باستانی با روغن‌های کمیاب، سونای هیمالیا، استخرهای آب درمانی و اتاق نمک دارویی.",
+      "persianTitle": "اسپا لاجوردی",
+      "subtitle": "خلوتگاهی سرشار از سکون و آب‌درمانی",
+      "description": "ماساژهای سنتی با روغن‌های کمیاب و سونای هیمالیا.",
       "category": "SPA",
       "floorLevel": "طبقه ۲-",
       "ambientLoop": {
-        "landscapeUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-        "posterUrl": "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1920&q=80"
+        "mediaType": "video",
+        "landscapeUrl": "/videos/scene-04-spa.mp4",
+        "posterUrl": "/tmp/scene-04-spa.jpg",
+        "durationSeconds": 6
       },
       "transitions": [
         {
           "id": "trans-spa-to-beach",
           "targetNodeId": "scene-05-beach",
+          "label": "ساحل اختصاصی",
+          "reverseAllowed": true,
           "video": {
-            "landscapeUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-            "posterUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80"
-          },
-          "label": "ساحل اختصاصی و کلوپ قایق‌رانی",
-          "reverseAllowed": true
+            "mediaType": "video",
+            "landscapeUrl": "/videos/trans-04-to-05.mp4",
+            "posterUrl": "/tmp/trans-04-to-05.jpg",
+            "durationSeconds": 6
+          }
         }
       ],
-      "hotspots": [
-        {
-          "id": "hs-spa-pool",
-          "title": "استخر آب‌درمانی کریستال",
-          "description": "غنی‌شده با املاح دریای مرده و نورپردازی درمانی فیبرنوری سقف.",
-          "category": "SPA",
-          "position": { "x": 58, "y": 62 }
-        }
-      ],
+      "hotspots": [],
       "audioProfile": {
-        "tone": "crystal_water",
-        "volume": 0.6
+        "tone": "zen_sanctuary",
+        "volume": 0.5
       }
     },
     {
       "id": "scene-05-beach",
-      "title": "Private Shore & Sunset Lounge",
-      "persianTitle": "ساحل اختصاصی و لانژ غروب خورشید",
-      "subtitle": "شن‌های طلایی، خنکای نسیم دریا و کاباناهای VIP",
-      "description": "حریم کاملاً خصوصی در ساحل اختصاصی هتل با سایه‌بان‌های مجلل و بار نوشیدنی‌های طبیعی استوایی.",
-      "category": "OUTDOOR",
-      "floorLevel": "سطح دریا",
+      "title": "Private Sunset Beach & Infinity Lounge",
+      "persianTitle": "ساحل اختصاصی",
+      "subtitle": "لانژ غروب اقیانوس با ساحل شنی سپید",
+      "description": "کابانا‌های اختصاصی و بار ساحلی آرامش‌بخش.",
+      "category": "BEACH",
+      "floorLevel": "ساحل",
       "ambientLoop": {
-        "landscapeUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        "posterUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80"
+        "mediaType": "video",
+        "landscapeUrl": "/videos/scene-05-beach.mp4",
+        "posterUrl": "/tmp/scene-05-beach.jpg",
+        "durationSeconds": 6
       },
       "transitions": [],
-      "hotspots": [
-        {
-          "id": "hs-cabana",
-          "title": "کاباناهای اختصاصی ساحلی",
-          "description": "مجهز به جکوزی اختصاصی، تخت‌های آفتابگیر طبی و پیشخدمت ساحلی.",
-          "category": "AMENITY",
-          "position": { "x": 35, "y": 65 }
-        }
-      ],
+      "hotspots": [],
       "audioProfile": {
-        "tone": "courtyard_breeze",
-        "volume": 0.7
+        "tone": "zen_sanctuary",
+        "volume": 0.6
       }
     }
   ]

@@ -7,20 +7,22 @@ import { VideoExperienceManager, VideoExperienceManagerRef } from './components/
 import { LuxuryBookingPage } from './components/booking/LuxuryBookingPage';
 import { HotelMapPage } from './components/map/HotelMapPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { StudioCanvas } from './studio/StudioCanvas';
+import { immersiveGraphToHotelGraph } from './utils/graphAdapters';
 import { audioAmbiance } from './services/AudioAmbienceEngine';
 
 export function App() {
-  const graph = hotelExperienceData as HotelExperienceGraph;
-  const [currentNodeId, setCurrentNodeId] = useState<string>(graph.initialNodeId);
-  const [activeView, setActiveView] = useState<'EXPERIENCE' | 'BOOKING' | 'MAP' | 'ADMIN'>('EXPERIENCE');
+  const [currentGraph, setCurrentGraph] = useState<HotelExperienceGraph>(hotelExperienceData as unknown as HotelExperienceGraph);
+  const [currentNodeId, setCurrentNodeId] = useState<string>(currentGraph.initialNodeId);
+  const [activeView, setActiveView] = useState<'EXPERIENCE' | 'BOOKING' | 'MAP' | 'ADMIN' | 'STUDIO'>('EXPERIENCE');
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
   const [transitionTargetTitle, setTransitionTargetTitle] = useState<string>('');
 
   const videoExperienceRef = useRef<VideoExperienceManagerRef | null>(null);
 
-  const currentIndex = graph.nodes.findIndex((n: any) => n.id === currentNodeId);
-  const currentNode: SequenceNode = (graph.nodes[currentIndex] as SequenceNode) || (graph.nodes[0] as SequenceNode);
+  const currentIndex = currentGraph.nodes.findIndex((n: any) => n.id === currentNodeId);
+  const currentNode: SequenceNode = (currentGraph.nodes[currentIndex] as SequenceNode) || (currentGraph.nodes[0] as SequenceNode);
 
   const handleNextScene = useCallback(() => {
     videoExperienceRef.current?.goToNext?.();
@@ -39,6 +41,16 @@ export function App() {
     setIsMuted(nextMuted);
   }, []);
 
+  // Handle custom graph launch from Visual Builder
+  const handleLaunchCustomGraph = useCallback((customGraph: any) => {
+    if (customGraph?.nodes) {
+      const adapted = immersiveGraphToHotelGraph(customGraph);
+      setCurrentGraph(adapted);
+      setCurrentNodeId(adapted.initialNodeId || adapted.nodes[0]?.id || currentNodeId);
+    }
+    setActiveView('EXPERIENCE');
+  }, [currentNodeId]);
+
   // Audio start upon initial user interaction
   useEffect(() => {
     const startAudioOnGesture = () => {
@@ -53,13 +65,37 @@ export function App() {
     };
   }, [currentNode]);
 
+  // Keyboard shortcut: Press 'B' to toggle Visual Builder
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'b' || e.key === 'B') {
+        setActiveView((prev) => (prev === 'STUDIO' ? 'EXPERIENCE' : 'STUDIO'));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // =========================================================================
-  // 1. Standalone View: Hotel Map Atlas
+  // 1. Standalone View: Node-based Visual Builder (Studio Canvas)
+  // =========================================================================
+  if (activeView === 'STUDIO') {
+    return (
+      <StudioCanvas
+        onExitStudio={() => setActiveView('EXPERIENCE')}
+        onLaunchJourney={handleLaunchCustomGraph}
+      />
+    );
+  }
+
+  // =========================================================================
+  // 2. Standalone View: Hotel Map Atlas
   // =========================================================================
   if (activeView === 'MAP') {
     return (
       <HotelMapPage
-        nodes={graph.nodes}
+        nodes={currentGraph.nodes}
         currentNodeId={currentNodeId}
         onSelectNode={handleJumpToScene}
         onBackToExperience={() => setActiveView('EXPERIENCE')}
@@ -68,20 +104,20 @@ export function App() {
   }
 
   // =========================================================================
-  // 2. Standalone View: Admin Dashboard
+  // 3. Standalone View: Admin Dashboard
   // =========================================================================
   if (activeView === 'ADMIN') {
     return (
       <AdminDashboard
-        graph={graph}
+        graph={currentGraph}
         onBackToExperience={() => setActiveView('EXPERIENCE')}
-        onLaunchJourney={() => setActiveView('EXPERIENCE')}
+        onLaunchJourney={handleLaunchCustomGraph}
       />
     );
   }
 
   // =========================================================================
-  // 3. Standalone View: Luxury Booking Wizard
+  // 4. Standalone View: Luxury Booking Wizard
   // =========================================================================
   if (activeView === 'BOOKING') {
     return (
@@ -100,14 +136,14 @@ export function App() {
   }
 
   // =========================================================================
-  // 4. Main Experience View: Cinematic Sequencer with Ambient Video Tour
+  // 5. Main Experience View: Cinematic Sequencer with Ambient Video Tour
   // =========================================================================
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-neutral-950 text-neutral-100 select-none font-sans">
       {/* Video Sequencer Engine */}
       <VideoExperienceManager
         ref={videoExperienceRef}
-        graph={graph as any}
+        graph={currentGraph as any}
         currentNodeId={currentNodeId}
         onNodeChange={setCurrentNodeId}
         onOpenBooking={() => setActiveView('BOOKING')}
@@ -130,16 +166,19 @@ export function App() {
         currentNode={currentNode}
         isTransitioning={isTransitioning}
         onOpenBooking={() => setActiveView('BOOKING')}
+        currentIndex={currentIndex}
+        totalScenes={currentGraph.nodes.length}
       />
 
       {/* Main Site Header & Timeline Navigation */}
       <NavigationTimeline
-        nodes={graph.nodes}
+        nodes={currentGraph.nodes}
         currentNodeId={currentNodeId}
         onSelectNode={handleJumpToScene}
         onOpenBooking={() => setActiveView('BOOKING')}
         onOpenMap={() => setActiveView('MAP')}
         onOpenAdmin={() => setActiveView('ADMIN')}
+        onOpenStudio={() => setActiveView('STUDIO')}
         isMuted={isMuted}
         onToggleMute={handleToggleMute}
         isTransitioning={isTransitioning}

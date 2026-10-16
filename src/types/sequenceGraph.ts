@@ -220,7 +220,24 @@ export interface SequenceGraph {
 // =========================================================================
 // انواع سازگاری با کدهای موجود (Legacy & Applet Compatibility Interfaces)
 // =========================================================================
+export type OverlayBlendMode = 'normal' | 'screen' | 'overlay' | 'soft-light' | 'multiply' | 'color-dodge';
+
+export interface SecondaryOverlayConfig {
+  mediaType: 'video' | 'image';
+  url: string;
+  posterUrl?: string;
+  blendMode: OverlayBlendMode;
+  opacity: number;
+  depthConfig?: {
+    factorX: number;
+    factorY: number;
+    scaleBase?: number;
+    invertParallax?: boolean;
+  };
+}
+
 export interface VideoSource {
+  mediaType?: 'video' | 'image';
   landscapeUrl: string;
   portraitUrl?: string;
   durationSeconds?: number;
@@ -261,6 +278,7 @@ export interface SequenceNode {
   category: string;
   floorLevel?: string;
   ambientLoop: VideoSource;
+  secondaryOverlay?: SecondaryOverlayConfig;
   transitions: TransitionEdge[];
   hotspots?: SpatialHotspot[];
   audioProfile: {

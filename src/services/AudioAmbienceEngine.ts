@@ -1,66 +1,27 @@
 /**
- * AudioAmbienceEngine
- * Web Audio API procedural synthesis with Equal-Power Cross-Fading
+ * AudioAmbienceEngine.ts
+ * 
+ * موتور طراحی صوتی اختصاصی مدیتیشن و آرامش‌بخش (Zen Luxury Meditation Soundscape)
+ * تنظیم شده بر اساس فرکانس طبیعی ۴۳۲ هرتز (فرکانس آلفا و تتا)
+ * - حذف کامل کلیه فرکانس‌های تیز، بیپ‌های دیجیتالی و صداهای خشن
+ * - بازسازی کاسه تبتی (Tibetan Singing Bowl) با رزونانس طبیعی برنزی و طنین آرامش‌بخش
+ * - اتمسفر تنفس عمیق اقیانوس (Oceanic Breath Drone) با فیلتر پایین‌گذر عمیق
+ * - بازخورد لمسی ملایم چوبی/قطره آب در ترنزیشن‌ها و اسکرابینگ
  */
-
-interface RoomToneAcousticSpec {
-  baseCutoff: number;
-  resonanceQ: number;
-  primaryLayer: string;
-  layerGain: number;
-}
-
-const ROOM_SPECS: Record<string, RoomToneAcousticSpec> = {
-  welcoming_strings: {
-    baseCutoff: 1800,
-    resonanceQ: 1.2,
-    primaryLayer: 'marble_hall',
-    layerGain: 0.22,
-  },
-  distant_waves: {
-    baseCutoff: 1200,
-    resonanceQ: 0.9,
-    primaryLayer: 'distant_waves',
-    layerGain: 0.28,
-  },
-  gentle_piano: {
-    baseCutoff: 2400,
-    resonanceQ: 1.4,
-    primaryLayer: 'gentle_piano',
-    layerGain: 0.24,
-  },
-  crystal_water: {
-    baseCutoff: 2100,
-    resonanceQ: 1.6,
-    primaryLayer: 'crystal_water',
-    layerGain: 0.26,
-  },
-  courtyard_breeze: {
-    baseCutoff: 1500,
-    resonanceQ: 0.8,
-    primaryLayer: 'courtyard_breeze',
-    layerGain: 0.3,
-  },
-  marble_hall_reverb: {
-    baseCutoff: 2600,
-    resonanceQ: 2.0,
-    primaryLayer: 'marble_hall',
-    layerGain: 0.25,
-  },
-};
 
 export class AudioAmbienceEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private dynamicFilterNode: BiquadFilterNode | null = null;
   private isMuted: boolean = false;
-  private currentDroneNodes: { stop: () => void }[] = [];
-  private currentDroneTone: string | null = null;
-  private activeRoomLayers: Map<string, { gainNode: GainNode; stop: () => void }> = new Map();
-  private currentVolume: number = 0.6;
-  private activeTone: string = 'welcoming_strings';
-  private pendingTimeouts: Set<ReturnType<typeof setTimeout>> = new Set();
-  private pianoIntervalId: ReturnType<typeof setInterval> | null = null;
+  private currentVolume: number = 0.5;
+  private activeTone: string = 'zen_sanctuary';
+
+  // لایه‌های پایدار اتمسفر مدیتیشن
+  private droneGain: GainNode | null = null;
+  private oceanGain: GainNode | null = null;
+  private bowlIntervalId: ReturnType<typeof setInterval> | null = null;
+  private activeOscillators: { stop: () => void }[] = [];
 
   private initContext() {
     if (this.ctx) return;
@@ -68,24 +29,244 @@ export class AudioAmbienceEngine {
     if (!AudioCtx) return;
     this.ctx = new AudioCtx();
 
+    // مستر گین با شیب ملایم
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : this.currentVolume, this.ctx.currentTime);
+    this.masterGain.gain.setValueAtTime(this.isMuted ? 0.0001 : this.currentVolume, this.ctx.currentTime);
 
+    // فیلتر پایین‌گذر اصلی برای حذف کامل هرگونه فرکانس گوش‌خراش
     this.dynamicFilterNode = this.ctx.createBiquadFilter();
     this.dynamicFilterNode.type = 'lowpass';
-    this.dynamicFilterNode.frequency.setValueAtTime(1800, this.ctx.currentTime);
-    this.dynamicFilterNode.Q.setValueAtTime(1.0, this.ctx.currentTime);
+    this.dynamicFilterNode.frequency.setValueAtTime(320, this.ctx.currentTime);
+    this.dynamicFilterNode.Q.setValueAtTime(0.7, this.ctx.currentTime); // نرم و طبیعی بدون زنگ زدن
 
     this.dynamicFilterNode.connect(this.masterGain);
     this.masterGain.connect(this.ctx.destination);
 
-    this.initAllRoomLayers();
+    // راه‌اندازی لایه‌های صوتی پایه مدیتیشن
+    this.startMeditationDrone();
+    this.startOceanBreath();
+  }
+
+  /**
+   * صدای پهن‌باند اقیانوسی و تنفس آرامش‌بخش (Deep Oceanic Breathing)
+   */
+  private startOceanBreath() {
+    if (!this.ctx || !this.dynamicFilterNode) return;
+
+    this.oceanGain = this.ctx.createGain();
+    this.oceanGain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+
+    // تولید نویز قهوه‌ای/صورتی نرم (Brown Noise)
+    const bufferSize = this.ctx.sampleRate * 3;
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    let lastOut = 0.0;
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      output[i] = (lastOut + 0.02 * white) / 1.02;
+      lastOut = output[i];
+      output[i] *= 0.6; // دامنه ملایم
+    }
+
+    const noiseSource = this.ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+    noiseSource.loop = true;
+
+    // فیلتر پایین‌گذر شدید روی ۱۶۰ هرتز (صدای دوردست امواج آرام ساحل در شب)
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(160, this.ctx.currentTime);
+
+    // نوسان‌ساز ریتم تنفس (LFO با پریود ~۱۲ ثانیه)
+    const lfo = this.ctx.createOscillator();
+    lfo.frequency.setValueAtTime(0.08, this.ctx.currentTime);
+    const lfoGain = this.ctx.createGain();
+    lfoGain.gain.setValueAtTime(60, this.ctx.currentTime);
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(filter.frequency);
+
+    noiseSource.connect(filter);
+    filter.connect(this.oceanGain);
+    this.oceanGain.connect(this.dynamicFilterNode);
+
+    noiseSource.start();
+    lfo.start();
+
+    this.activeOscillators.push({
+      stop: () => {
+        try {
+          noiseSource.stop();
+          lfo.stop();
+          noiseSource.disconnect();
+          lfo.disconnect();
+          lfoGain.disconnect();
+          filter.disconnect();
+        } catch {}
+      },
+    });
+  }
+
+  /**
+   * پد عمیق ۴۳۲ هرتز و هارمونی‌های آرامش‌بخش تتا (Theta Meditation Chords)
+   */
+  private startMeditationDrone() {
+    if (!this.ctx || !this.dynamicFilterNode) return;
+
+    this.droneGain = this.ctx.createGain();
+    this.droneGain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+    this.droneGain.connect(this.dynamicFilterNode);
+
+    const now = this.ctx.currentTime;
+    // فرکانس‌های هارمونیک بر پایه ۴۳۲ هرتز (108Hz Sub-Root, 216Hz Body, 324Hz Gentle Fifth)
+    const droneFreqs = [108.0, 216.0, 324.0];
+
+    droneFreqs.forEach((freq, idx) => {
+      if (!this.ctx || !this.droneGain) return;
+      const osc = this.ctx.createOscillator();
+      const oscGain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      // دیتون ظریف (Binaural beating ملایم برای ترشح امواج آلفا)
+      const detune = idx === 1 ? 0.8 : idx === 2 ? -0.6 : 0;
+      osc.frequency.setValueAtTime(freq + detune, now);
+
+      // بهره کم برای صدای پس‌زمینه گرم و مخملی
+      const gainVal = idx === 0 ? 0.08 : idx === 1 ? 0.06 : 0.035;
+      oscGain.gain.setValueAtTime(gainVal, now);
+
+      osc.connect(oscGain);
+      oscGain.connect(this.droneGain);
+      osc.start(now);
+
+      this.activeOscillators.push({
+        stop: () => {
+          try {
+            osc.stop();
+            osc.disconnect();
+            oscGain.disconnect();
+          } catch {}
+        },
+      });
+    });
+  }
+
+  /**
+   * کاسه تبتی / چایم کریستال مدیتیشن (Tibetan Singing Bowl Chime)
+   * صدایی گرم، عمیق و طنین‌انداز در هنگام آغاز ترنزیشن، بدون هرگونه تیزی
+   */
+  public playTransitionChime() {
+    this.initContext();
+    if (!this.ctx || !this.masterGain || this.isMuted) return;
+
+    const now = this.ctx.currentTime;
+
+    // گین اختصاصی کاسه تبتی
+    const chimeGain = this.ctx.createGain();
+    chimeGain.gain.setValueAtTime(0.0001, now);
+    // اتک نرم و ابریشمی (۸۰ میلی‌ثانیه به جای ضربه خشن)
+    chimeGain.gain.exponentialRampToValueAtTime(0.14, now + 0.08);
+    // دم ملایم و طولانی (۳.۸ ثانیه دی‌کی آرامش‌بخش)
+    chimeGain.gain.exponentialRampToValueAtTime(0.0001, now + 3.8);
+    chimeGain.connect(this.masterGain);
+
+    // مولفه‌های فرکانسی کاسه تبتی (ریشه ۲۱۶ هرتز + فواصل هارمونیک ملایم)
+    const partials = [
+      { freq: 216.0, gain: 0.12 },  // ریشه عمیق
+      { freq: 324.0, gain: 0.05 },  // پرده پنجم هارمونیک
+      { freq: 432.0, gain: 0.04 },  // اکتاو ۴۳۲ هرتز آرامش
+    ];
+
+    partials.forEach(({ freq, gain }) => {
+      if (!this.ctx) return;
+      const osc = this.ctx.createOscillator();
+      const pGain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now);
+      pGain.gain.setValueAtTime(gain, now);
+
+      osc.connect(pGain);
+      pGain.connect(chimeGain);
+
+      osc.start(now);
+      osc.stop(now + 4.0);
+
+      osc.onended = () => {
+        try {
+          osc.disconnect();
+          pGain.disconnect();
+        } catch {}
+      };
+    });
+
+    setTimeout(() => {
+      try {
+        chimeGain.disconnect();
+      } catch {}
+    }, 4200);
+  }
+
+  /**
+   * بازخورد لمسی اسکرابینگ و کلیک (Tactile Wooden Zen Drop)
+   * یک فرکانس ملایم ۲۱۶ هرتز شبیه قطره آب روی چوب با ولوم بسیار ناچیز
+   */
+  public playTick() {
+    this.initContext();
+    if (!this.ctx || !this.masterGain || this.isMuted) return;
+
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(216.0, now);
+
+    gain.gain.setValueAtTime(0.015, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(now);
+    osc.stop(now + 0.1);
+
+    osc.onended = () => {
+      try {
+        osc.disconnect();
+        gain.disconnect();
+      } catch {}
+    };
+  }
+
+  /**
+   * تنظیم ملایم فیلتر در حین ترنزیشن بدون صدای آزاردهنده
+   */
+  public modulateTransitionSoundscape(
+    progress: number,
+    _fromTone?: string,
+    _toTone?: string,
+    velocity: number = 0
+  ) {
+    if (!this.ctx || !this.dynamicFilterNode || this.isMuted) return;
+    const now = this.ctx.currentTime;
+    const clampedP = Math.max(0, Math.min(1, progress));
+
+    // تغییر تدریجی و آرام کات‌آف فیلتر در بازه ۲۴۰ تا ۳۶۰ هرتز (همواره گرم و فاقد تیزی)
+    const targetCutoff = 240 + Math.sin(clampedP * Math.PI) * 90 + Math.min(40, Math.abs(velocity) * 20);
+
+    this.dynamicFilterNode.frequency.cancelScheduledValues(now);
+    this.dynamicFilterNode.frequency.setValueAtTime(this.dynamicFilterNode.frequency.value, now);
+    this.dynamicFilterNode.frequency.setTargetAtTime(targetCutoff, now, 0.2);
   }
 
   public setMuted(muted: boolean) {
     this.isMuted = muted;
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setTargetAtTime(muted ? 0 : this.currentVolume, this.ctx.currentTime, 0.1);
+      const now = this.ctx.currentTime;
+      this.masterGain.gain.cancelScheduledValues(now);
+      this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+      this.masterGain.gain.setTargetAtTime(muted ? 0.0001 : this.currentVolume, now, 0.25);
     }
   }
 
@@ -105,547 +286,39 @@ export class AudioAmbienceEngine {
     }
   }
 
-  public playAmbiance(tone: string = 'welcoming_strings', volume: number = 0.6) {
+  public playAmbiance(tone: string = 'zen_sanctuary', volume: number = 0.5) {
     this.initContext();
-    if (!this.ctx || !this.masterGain || !this.dynamicFilterNode) return;
+    if (!this.ctx || !this.masterGain) return;
+    this.activeTone = tone;
+    this.setVolume(volume);
 
     if (this.ctx.state === 'suspended' && !this.isMuted) {
       this.ctx.resume().catch(() => {});
     }
-
-    if (this.currentDroneTone === tone && this.currentDroneNodes.length > 0) {
-      this.setRoomAmbientLayer(tone, volume, 1.8);
-      return;
-    }
-    this.currentDroneTone = tone;
-    this.stopCurrentDrones();
-
-    const t = this.ctx.currentTime;
-    const toneGain = this.ctx.createGain();
-    toneGain.gain.setValueAtTime(0.0001, t);
-    toneGain.gain.setTargetAtTime(1.0, t, 0.7);
-    toneGain.connect(this.dynamicFilterNode);
-
-    const spec = ROOM_SPECS[tone] || ROOM_SPECS.welcoming_strings;
-    this.dynamicFilterNode.frequency.cancelScheduledValues(t);
-    this.dynamicFilterNode.frequency.setValueAtTime(this.dynamicFilterNode.frequency.value, t);
-    this.dynamicFilterNode.frequency.setTargetAtTime(spec.baseCutoff, t, 1.0);
-
-    this.dynamicFilterNode.Q.cancelScheduledValues(t);
-    this.dynamicFilterNode.Q.setValueAtTime(this.dynamicFilterNode.Q.value, t);
-    this.dynamicFilterNode.Q.setTargetAtTime(spec.resonanceQ, t, 1.0);
-
-    const cleanupFns: (() => void)[] = [];
-    const baseFreqs = tone === 'distant_waves' ? [55, 110, 164.8] : [65.41, 130.81, 196.0];
-
-    baseFreqs.forEach((freq, idx) => {
-      if (!this.ctx) return;
-      const osc = this.ctx.createOscillator();
-      const oscGain = this.ctx.createGain();
-      osc.type = idx === 0 ? 'sine' : 'triangle';
-      osc.frequency.setValueAtTime(freq, t);
-      oscGain.gain.setValueAtTime(0.08 / (idx + 1), t);
-
-      osc.connect(oscGain);
-      oscGain.connect(toneGain);
-      osc.start(t);
-
-      cleanupFns.push(() => {
-        try {
-          osc.stop();
-          osc.disconnect();
-          oscGain.disconnect();
-        } catch {}
-      });
-    });
-
-    this.currentDroneNodes.push({
-      stop: () => {
-        if (!this.ctx) return;
-        const now = this.ctx.currentTime;
-        toneGain.gain.cancelScheduledValues(now);
-        toneGain.gain.setValueAtTime(toneGain.gain.value, now);
-        toneGain.gain.setTargetAtTime(0.0001, now, 0.65);
-        const tid = setTimeout(() => {
-          this.pendingTimeouts.delete(tid);
-          cleanupFns.forEach((fn) => fn());
-          try {
-            toneGain.disconnect();
-          } catch {}
-        }, 2200);
-        this.pendingTimeouts.add(tid);
-      },
-    });
-
-    this.setRoomAmbientLayer(tone, volume, 2.0);
   }
 
-  public modulateTransitionSoundscape(
-    arg1: string | number,
-    arg2: string | number,
-    arg3: string | number,
-    arg4: number = 0
-  ) {
-    if (!this.ctx || !this.dynamicFilterNode || this.isMuted) return;
-    const now = this.ctx.currentTime;
-
-    let fromTone = 'welcoming_strings';
-    let toTone = 'marble_hall_reverb';
-    let progress = 0;
-    let scrollVelocity = 0;
-
-    if (typeof arg1 === 'number') {
-      progress = arg1;
-      fromTone = String(arg2);
-      toTone = String(arg3);
-      scrollVelocity = arg4;
-    } else {
-      fromTone = String(arg1);
-      toTone = String(arg2);
-      progress = Number(arg3);
-      scrollVelocity = arg4;
-    }
-
-    const clampedP = Math.max(0, Math.min(1, progress));
-
-    const fromSpec = ROOM_SPECS[fromTone] || ROOM_SPECS.welcoming_strings;
-    const toSpec = ROOM_SPECS[toTone] || ROOM_SPECS.marble_hall_reverb;
-
-    const midDip = Math.sin(clampedP * Math.PI) * 320;
-    const velocityAirSparkle = Math.min(600, Math.abs(scrollVelocity) * 320);
-
-    const targetCutoff = Math.max(
-      380,
-      fromSpec.baseCutoff + (toSpec.baseCutoff - fromSpec.baseCutoff) * clampedP - midDip + velocityAirSparkle
-    );
-
-    const midResonancePeak = Math.sin(clampedP * Math.PI) * 1.6;
-    const targetQ = fromSpec.resonanceQ + (toSpec.resonanceQ - fromSpec.resonanceQ) * clampedP + midResonancePeak;
-
-    this.dynamicFilterNode.frequency.cancelScheduledValues(now);
-    this.dynamicFilterNode.frequency.setValueAtTime(this.dynamicFilterNode.frequency.value, now);
-    this.dynamicFilterNode.frequency.setTargetAtTime(targetCutoff, now, 0.1);
-
-    this.dynamicFilterNode.Q.cancelScheduledValues(now);
-    this.dynamicFilterNode.Q.setValueAtTime(this.dynamicFilterNode.Q.value, now);
-    this.dynamicFilterNode.Q.setTargetAtTime(targetQ, now, 0.1);
-
-    this.crossfadeRoomLayers(fromSpec.primaryLayer, toSpec.primaryLayer, clampedP, fromSpec, toSpec);
-  }
-
-  public setRoomAmbientLayer(tone: string, volume: number = 0.6, fadeDuration: number = 1.8) {
-    if (!this.ctx) return;
-    this.currentVolume = volume;
+  public setRoomAmbientLayer(tone: string, volume: number = 0.5, _fadeDuration?: number) {
     this.activeTone = tone;
-    const spec = ROOM_SPECS[tone] || ROOM_SPECS.welcoming_strings;
-    const activeLayerName = spec.primaryLayer;
-    const now = this.ctx.currentTime;
-    const timeConstant = Math.max(0.2, fadeDuration * 0.35);
-
-    this.activeRoomLayers.forEach((layer, layerName) => {
-      if (!this.ctx) return;
-      const targetGain = layerName === activeLayerName ? Math.max(0.0001, spec.layerGain * (volume / 0.6)) : 0.0001;
-      const currentGain = layer.gainNode.gain.value;
-      layer.gainNode.gain.cancelScheduledValues(now);
-      layer.gainNode.gain.setValueAtTime(currentGain, now);
-      layer.gainNode.gain.setTargetAtTime(targetGain, now, timeConstant);
-    });
+    this.setVolume(volume);
   }
 
-  public crossfadeBetweenTones(fromTone: string, toTone: string, durationSeconds: number = 1.8) {
-    if (!this.ctx || this.isMuted) return;
-    const toSpec = ROOM_SPECS[toTone] || ROOM_SPECS.marble_hall_reverb;
-    const now = this.ctx.currentTime;
-    const dur = Math.max(0.4, durationSeconds);
-    const timeConstant = dur * 0.38;
-
-    if (this.dynamicFilterNode) {
-      this.dynamicFilterNode.frequency.cancelScheduledValues(now);
-      this.dynamicFilterNode.frequency.setValueAtTime(this.dynamicFilterNode.frequency.value, now);
-      this.dynamicFilterNode.frequency.setTargetAtTime(toSpec.baseCutoff, now, timeConstant);
-
-      this.dynamicFilterNode.Q.cancelScheduledValues(now);
-      this.dynamicFilterNode.Q.setValueAtTime(this.dynamicFilterNode.Q.value, now);
-      this.dynamicFilterNode.Q.setTargetAtTime(toSpec.resonanceQ, now, timeConstant);
-    }
-
-    const targetGain = toSpec.layerGain * (this.currentVolume / 0.6);
-    this.activeRoomLayers.forEach((layer, name) => {
-      const currentVal = layer.gainNode.gain.value;
-      layer.gainNode.gain.cancelScheduledValues(now);
-      layer.gainNode.gain.setValueAtTime(currentVal, now);
-
-      if (name === toSpec.primaryLayer) {
-        layer.gainNode.gain.setTargetAtTime(targetGain, now, timeConstant);
-      } else {
-        layer.gainNode.gain.setTargetAtTime(0.0001, now, timeConstant * 1.1);
-      }
-    });
-
+  public crossfadeBetweenTones(_fromTone: string, toTone: string, _duration?: number) {
     this.activeTone = toTone;
   }
 
-  private crossfadeRoomLayers(
-    fromLayer: string,
-    toLayer: string,
-    progress: number,
-    fromSpec?: RoomToneAcousticSpec,
-    toSpec?: RoomToneAcousticSpec
-  ) {
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const clampedP = Math.max(0, Math.min(1, progress));
-
-    const fSpec = fromSpec || ROOM_SPECS[this.activeTone] || ROOM_SPECS.welcoming_strings;
-    const tSpec = toSpec || ROOM_SPECS.marble_hall_reverb;
-
-    if (fromLayer === toLayer) {
-      const steadyTarget = Math.max(0.0001, fSpec.layerGain * (this.currentVolume / 0.6));
-      this.activeRoomLayers.forEach((layer, name) => {
-        const currentVal = layer.gainNode.gain.value;
-        layer.gainNode.gain.cancelScheduledValues(now);
-        layer.gainNode.gain.setValueAtTime(currentVal, now);
-        if (name === fromLayer) {
-          layer.gainNode.gain.setTargetAtTime(steadyTarget, now, 0.12);
-        } else {
-          layer.gainNode.gain.setTargetAtTime(0.0001, now, 0.25);
-        }
-      });
-      return;
-    }
-
-    const angle = clampedP * 0.5 * Math.PI;
-    const fromWeight = Math.cos(angle);
-    const toWeight = Math.sin(angle);
-
-    const fromTarget = Math.max(0.0001, fSpec.layerGain * fromWeight * (this.currentVolume / 0.6));
-    const toTarget = Math.max(0.0001, tSpec.layerGain * toWeight * (this.currentVolume / 0.6));
-
-    this.activeRoomLayers.forEach((layer, name) => {
-      const currentVal = layer.gainNode.gain.value;
-      layer.gainNode.gain.cancelScheduledValues(now);
-      layer.gainNode.gain.setValueAtTime(currentVal, now);
-
-      if (name === fromLayer) {
-        layer.gainNode.gain.setTargetAtTime(fromTarget, now, 0.12);
-      } else if (name === toLayer) {
-        layer.gainNode.gain.setTargetAtTime(toTarget, now, 0.12);
-      } else {
-        layer.gainNode.gain.setTargetAtTime(0.0001, now, 0.25);
-      }
-    });
-  }
-
-  private initAllRoomLayers() {
-    if (!this.ctx || !this.dynamicFilterNode) return;
-    this.createDistantWavesLayer();
-    this.createGentlePianoLayer();
-    this.createCrystalWaterLayer();
-    this.createMarbleHallLayer();
-    this.createCourtyardBreezeLayer();
-  }
-
-  private createDistantWavesLayer() {
-    if (!this.ctx || !this.dynamicFilterNode) return;
-    const layerGain = this.ctx.createGain();
-    layerGain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-    layerGain.connect(this.dynamicFilterNode);
-
-    const bufferSize = this.ctx.sampleRate * 2;
-    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + white * 0.0555179;
-      b1 = 0.99332 * b1 + white * 0.0750759;
-      b2 = 0.96900 * b2 + white * 0.1538520;
-      b3 = 0.86650 * b3 + white * 0.3104856;
-      b4 = 0.55000 * b4 + white * 0.5329522;
-      b5 = -0.7616 * b5 - white * 0.0168980;
-      output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
-      b6 = white * 0.115926;
-    }
-
-    const whiteNoise = this.ctx.createBufferSource();
-    whiteNoise.buffer = noiseBuffer;
-    whiteNoise.loop = true;
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(450, this.ctx.currentTime);
-
-    const lfo = this.ctx.createOscillator();
-    lfo.frequency.setValueAtTime(0.12, this.ctx.currentTime); // ~8 sec ocean wave cycle
-    const lfoGain = this.ctx.createGain();
-    lfoGain.gain.setValueAtTime(260, this.ctx.currentTime);
-    lfo.connect(lfoGain);
-    lfoGain.connect(filter.frequency);
-
-    whiteNoise.connect(filter);
-    filter.connect(layerGain);
-    whiteNoise.start();
-    lfo.start();
-
-    this.activeRoomLayers.set('distant_waves', {
-      gainNode: layerGain,
-      stop: () => {
-        try {
-          whiteNoise.stop();
-          lfo.stop();
-          whiteNoise.disconnect();
-          lfo.disconnect();
-          lfoGain.disconnect();
-          filter.disconnect();
-          layerGain.disconnect();
-        } catch {}
-      },
-    });
-  }
-
-  private createGentlePianoLayer() {
-    if (!this.ctx || !this.dynamicFilterNode) return;
-    const layerGain = this.ctx.createGain();
-    layerGain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-    layerGain.connect(this.dynamicFilterNode);
-
-    const pianoNotes = [261.63, 329.63, 392.00, 493.88, 523.25, 659.25];
-    let noteIdx = 0;
-
-    const triggerPianoNote = () => {
-      if (!this.ctx || this.isMuted) return;
-      if (layerGain.gain.value < 0.0005) return;
-
-      const now = this.ctx.currentTime;
-      const freq = pianoNotes[noteIdx % pianoNotes.length];
-      noteIdx++;
-
-      const osc = this.ctx.createOscillator();
-      const noteGain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, now);
-
-      noteGain.gain.setValueAtTime(0.0001, now);
-      noteGain.gain.exponentialRampToValueAtTime(0.18, now + 0.04);
-      noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.8);
-
-      osc.connect(noteGain);
-      noteGain.connect(layerGain);
-      osc.onended = () => {
-        try {
-          osc.disconnect();
-          noteGain.disconnect();
-        } catch {}
-      };
-      osc.start(now);
-      osc.stop(now + 3.0);
-    };
-
-    this.pianoIntervalId = setInterval(triggerPianoNote, 3400);
-
-    this.activeRoomLayers.set('gentle_piano', {
-      gainNode: layerGain,
-      stop: () => {
-        if (this.pianoIntervalId) {
-          clearInterval(this.pianoIntervalId);
-          this.pianoIntervalId = null;
-        }
-        try {
-          layerGain.disconnect();
-        } catch {}
-      },
-    });
-  }
-
-  private createCrystalWaterLayer() {
-    if (!this.ctx || !this.dynamicFilterNode) return;
-    const layerGain = this.ctx.createGain();
-    layerGain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-    layerGain.connect(this.dynamicFilterNode);
-
-    const osc1 = this.ctx.createOscillator();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(784, this.ctx.currentTime);
-
-    const osc2 = this.ctx.createOscillator();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(1046.5, this.ctx.currentTime);
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(900, this.ctx.currentTime);
-    filter.Q.setValueAtTime(3.5, this.ctx.currentTime);
-
-    osc1.connect(filter);
-    osc2.connect(filter);
-    filter.connect(layerGain);
-    osc1.start();
-    osc2.start();
-
-    this.activeRoomLayers.set('crystal_water', {
-      gainNode: layerGain,
-      stop: () => {
-        try {
-          osc1.stop();
-          osc2.stop();
-          osc1.disconnect();
-          osc2.disconnect();
-          filter.disconnect();
-          layerGain.disconnect();
-        } catch {}
-      },
-    });
-  }
-
-  private createMarbleHallLayer() {
-    if (!this.ctx || !this.dynamicFilterNode) return;
-    const layerGain = this.ctx.createGain();
-    layerGain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-    layerGain.connect(this.dynamicFilterNode);
-
-    const osc = this.ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(220, this.ctx.currentTime);
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(600, this.ctx.currentTime);
-
-    osc.connect(filter);
-    filter.connect(layerGain);
-    osc.start();
-
-    this.activeRoomLayers.set('marble_hall', {
-      gainNode: layerGain,
-      stop: () => {
-        try {
-          osc.stop();
-          osc.disconnect();
-          filter.disconnect();
-          layerGain.disconnect();
-        } catch {}
-      },
-    });
-  }
-
-  private createCourtyardBreezeLayer() {
-    if (!this.ctx || !this.dynamicFilterNode) return;
-    const layerGain = this.ctx.createGain();
-    layerGain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-    layerGain.connect(this.dynamicFilterNode);
-
-    const osc = this.ctx.createOscillator();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(140, this.ctx.currentTime);
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(320, this.ctx.currentTime);
-    filter.Q.setValueAtTime(1.2, this.ctx.currentTime);
-
-    osc.connect(filter);
-    filter.connect(layerGain);
-    osc.start();
-
-    this.activeRoomLayers.set('courtyard_breeze', {
-      gainNode: layerGain,
-      stop: () => {
-        try {
-          osc.stop();
-          osc.disconnect();
-          filter.disconnect();
-          layerGain.disconnect();
-        } catch {}
-      },
-    });
-  }
-
-  public playTransitionChime() {
-    this.initContext();
-    if (!this.ctx || !this.masterGain || this.isMuted) return;
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, t);
-    osc.frequency.exponentialRampToValueAtTime(1760, t + 0.35);
-
-    gain.gain.setValueAtTime(0.001, t);
-    gain.gain.exponentialRampToValueAtTime(0.09, t + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
-
-    osc.connect(gain);
-    gain.connect(this.masterGain);
-    osc.onended = () => {
-      try {
-        osc.disconnect();
-        gain.disconnect();
-      } catch {}
-    };
-    osc.start(t);
-    osc.stop(t + 0.65);
-  }
-
-  public playTick() {
-    this.initContext();
-    if (!this.ctx || !this.masterGain || this.isMuted) return;
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(1046.5, t);
-
-    gain.gain.setValueAtTime(0.04, t);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
-
-    osc.connect(gain);
-    gain.connect(this.masterGain);
-    osc.onended = () => {
-      try {
-        osc.disconnect();
-        gain.disconnect();
-      } catch {}
-    };
-    osc.start(t);
-    osc.stop(t + 0.08);
-  }
-
-  private stopCurrentDrones() {
-    this.currentDroneNodes.forEach((node) => node.stop());
-    this.currentDroneNodes = [];
-  }
-
-  public warmUpAudioProfile(_tone: string): void {
-    // primes audio buffers or room specs if AudioContext is active
-    if (!this.ctx) return;
-  }
-
+  public warmUpAudioProfile(_tone: string): void {}
   public purgeAudioBuffersForTones(tones: string[]): { purgedCount: number } {
     return { purgedCount: tones.length };
   }
-
-  public pruneNonAdjacentAudio(_tones: string[]): void {
-    // cleans up non-adjacent audio layers
-  }
+  public pruneNonAdjacentAudio(_tones: string[]): void {}
 
   public destroy() {
-    this.pendingTimeouts.forEach((tid) => clearTimeout(tid));
-    this.pendingTimeouts.clear();
-
-    if (this.pianoIntervalId) {
-      clearInterval(this.pianoIntervalId);
-      this.pianoIntervalId = null;
+    if (this.bowlIntervalId) {
+      clearInterval(this.bowlIntervalId);
+      this.bowlIntervalId = null;
     }
-
-    this.stopCurrentDrones();
-    this.activeRoomLayers.forEach((layer) => {
-      try {
-        layer.stop();
-      } catch {}
-    });
-    this.activeRoomLayers.clear();
+    this.activeOscillators.forEach((osc) => osc.stop());
+    this.activeOscillators = [];
 
     if (this.dynamicFilterNode) {
       try {

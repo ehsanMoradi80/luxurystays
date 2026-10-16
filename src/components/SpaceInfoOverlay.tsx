@@ -1,5 +1,4 @@
 import React from 'react';
-import { Calendar } from 'lucide-react';
 import { SequenceNode } from '../types/sequenceGraph';
 
 interface SpaceInfoOverlayProps {
@@ -8,46 +7,45 @@ interface SpaceInfoOverlayProps {
   onOpenBooking: () => void;
   currentIndex?: number;
   totalScenes?: number;
-  onSelectScene?: (nodeId: string) => void;
-  onNextScene?: () => void;
-  onPrevScene?: () => void;
 }
 
 export const SpaceInfoOverlay: React.FC<SpaceInfoOverlayProps> = ({
   currentNode,
   isTransitioning,
-  onOpenBooking,
+  currentIndex = 0,
+  totalScenes = 5,
 }) => {
   return (
-    <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-end p-6 sm:p-12 md:p-16 select-none font-['Vazirmatn']">
-      {/* Bottom Main Content - Ultra-Minimal & Cinematic */}
+    <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-end p-6 sm:p-10 select-none font-['Vazirmatn']">
+      {/* Discreet, ultra-refined title tag - minimal and non-intrusive */}
       <div
-        className={`max-w-xl pointer-events-auto transition-all duration-700 ease-out ${
+        className={`pointer-events-none transition-all duration-500 ease-out max-w-sm ${
           isTransitioning
-            ? 'opacity-0 blur-xs translate-y-4 pointer-events-none'
-            : 'opacity-100 blur-none translate-y-0'
+            ? 'opacity-0 translate-y-3 pointer-events-none'
+            : 'opacity-100 translate-y-0'
         }`}
       >
-        <h1 className="text-3xl sm:text-5xl md:text-6xl font-black text-white tracking-tight drop-shadow-[0_4px_24px_rgba(0,0,0,0.9)] mb-2 leading-tight">
+        <div className="inline-flex items-center gap-2 mb-1.5 px-2.5 py-0.5 rounded-full bg-neutral-900/60 backdrop-blur-md border border-white/10 text-[11px] text-amber-300 font-mono tracking-wider">
+          <span>{String(currentIndex + 1).padStart(2, '0')}</span>
+          <span className="text-white/20">/</span>
+          <span className="text-white/40">{String(totalScenes).padStart(2, '0')}</span>
+          {currentNode.floorLevel && (
+            <>
+              <span className="w-1 h-1 rounded-full bg-amber-400/60" />
+              <span className="text-white/70 font-sans font-light">{currentNode.floorLevel}</span>
+            </>
+          )}
+        </div>
+
+        <h2 className="text-lg sm:text-xl font-bold text-white tracking-wide drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)] leading-tight">
           {currentNode.persianTitle}
-        </h1>
+        </h2>
 
         {currentNode.subtitle && (
-          <p className="text-xs sm:text-sm text-amber-200/90 font-light mb-5 drop-shadow-md">
+          <p className="text-xs text-neutral-300/80 font-light drop-shadow mt-0.5 leading-relaxed">
             {currentNode.subtitle}
           </p>
         )}
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onOpenBooking}
-            className="group flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-xs shadow-lg shadow-amber-400/20 transition-all cursor-pointer active:scale-95"
-          >
-            <Calendar className="w-3.5 h-3.5 text-neutral-950" />
-            <span>رزرو این فضا</span>
-          </button>
-        </div>
       </div>
     </div>
   );
