@@ -1,13 +1,21 @@
 /**
  * VideoExperienceManager.tsx
  * 
- * موتور سینمایی سکانس‌ها و سکانس‌های ترنزیشن با فیزیک کشیدن و اینرسی (Drag & Inertia Engine)
- * کاملاً منطبق با درخواست اختصاصی کاربر:
- * ۱. ترنزیشن فقط و فقط با کشیدن (Drag) و اینرسی فیزیکی حرکت می‌کند.
- * ۲. هنگام بی‌حرکتی، هیچ‌گونه پروگرس خودکار (No Auto-Progress) وجود ندارد؛ ویدیو کاملاً متوقف می‌ماند.
- * ۳. هماهنگی صدم‌ثانیه‌ای فریم‌های ویدیوی MP4 با پیشرفت کشش کاربر.
- * ۴. پشتیبانی هم‌زمان از درگ ماوس، ژست لمسی موبایل، ترک‌پد و اسکرول با اینرسی طبیعی (Damping Friction).
- * ۵. مدیریت بهینه مموری و بافر دیکودر ویدیویی (Zero Memory Leaks).
+ * موتور سینمایی سکانس‌ها و ترنزیشن‌های ویدیویی پیوسته (Zero Black Screen Engine)
+ * 
+ * اصول کلیدی تضمین عدم سیاهی صفحه و فیزیک واقع‌گرایانه:
+ * ۱. معماری بافر دوگانه (Dual-Buffer Ping-Pong Scene Slots):
+ *    دو المان ویدیویی مجزای سکانس (Slot A و Slot B) در دام مونت هستند. هرگز src ویدیوی در حال نمایش
+ *    عوض نمی‌شود تا دیکودر مرورگر سیاه نکند؛ سکانس جدید در اسلات پس‌زمینه لود شده و تنها پس از دریافت
+ *    رویداد `playing` (وجود فریم واقعی روی GPU) سوئیچ انجام می‌شود.
+ * ۲. تداوم فریم ترنزیشن (Transition Frame Continuity):
+ *    ویدیوی ترنزیشن تا زمانی که ویدیوی سکانس مقصد شروع به پخش نکرده است در لایه بالا با شفافیت ۱۰۰٪
+ *    روی آخرین فریم خود می‌ماند. بنابراین حتی یک میلی‌ثانیه فضای مشکی ظاهر نمی‌شود.
+ * ۳. کنترل شتاب و اینرسی (Velocity Clamping):
+ *    حداکثر سرعت به صورت سخت‌گیرانه لیمیت شده است (MAX_INERTIA_VELOCITY = 0.007) تا ویدیو مثل فشنگ رد نشود
+ *    و کاربر تمام فریم‌های ترنزیشن را با وقار سینمایی تجربه کند.
+ * ۴. صفر بودن پیشرفت خودکار: در غیاب لمس یا کشیدن کاربر، هیچ اتوپروگرسی وجود ندارد و ویدیو روی همان فریم متوقف می‌ماند.
+ * ۵. مدیریت بهینه حافظه: بافر لغزان فقط نود قبلی، فعلی و بعدی را در حافظه نگه می‌دارد.
  */
 
 import React, {
@@ -22,7 +30,7 @@ import {
   HotelExperienceGraph,
   TransitionEdge,
 } from '../types/sequenceGraph';
-import { MoveVertical } from 'lucide-react';
+import { preloadManager } from '../services/PreloadManager';
 
 export interface VideoExperienceManagerRef {
   goToNext: () => void;
@@ -39,8 +47,16 @@ interface VideoExperienceManagerProps {
   onStatusChange?: (status: 'IDLE' | 'TRANSITIONING') => void;
   onTransitionStart?: (edge: TransitionEdge) => void;
   onTransitionEnd?: () => void;
+  onProgressChange?: (progress: number, overallProgress: number) => void;
   enableScrollScrubbing?: boolean;
 }
+
+// ثوابت فیزیک اینرسی لوکس و سقف سرعت تایم‌لاین ویدیو (Playhead Speed Limit)
+const MAX_PLAYHEAD_SPEED_PER_SEC = 0.38; // حداکثر پیشرفت مجاز تایم‌لاین در هر ثانیه (حداقل ۲.۶ ثانیه برای دیدن کامل فریم‌ها)
+const MAX_INERTIA_VELOCITY = 0.0048; // سقف سرعت اینرسی در هر فریم
+const INERTIA_DAMPING = 0.95; // ضریب میرایی و اصطکاک نرم
+const VELOCITY_STOP_THRESHOLD = 0.00004; // آستانه توقف قطعی بدون هیچ حرکت خودکار
+const MAX_SINGLE_FRAME_DELTA = 0.0075; // حداکثر جابجایی پیشرفت در یک فریم (ممانعت از پرش ناگهانی)
 
 export const VideoExperienceManager = forwardRef<
   VideoExperienceManagerRef,
@@ -54,52 +70,28 @@ export const VideoExperienceManager = forwardRef<
       onStatusChange,
       onTransitionStart,
       onTransitionEnd,
+      onProgressChange,
     },
     ref
   ) => {
     // -------------------------------------------------------------------------
-    // ۱. استیت‌های هسته (Core State)
+    // ۱. ارجاعات ویدیوها و وضعیت بافر دوگانه (Dual-Buffer)
     // -------------------------------------------------------------------------
-    const [mode, setMode] = useState<'SCENE' | 'TRANSITION'>('SCENE');
-    const [activeEdge, setActiveEdge] = useState<TransitionEdge | null>(null);
-    const [isReverse, setIsReverse] = useState<boolean>(false);
-    const [progress, setProgress] = useState<number>(0);
-    const [isDragging, setIsDragging] = useState<boolean>(false);
-
-    // ارجاعات به عناصر ویدیو و کانتینر
-    const sceneVideoRef = useRef<HTMLVideoElement | null>(null);
-    const transitionVideoRef = useRef<HTMLVideoElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
 
-    // مقادیر فیزیک اینرسی
-    const velocityRef = useRef<number>(0);
-    const inertiaRafRef = useRef<number | null>(null);
-    const isDraggingRef = useRef<boolean>(false);
-    const dragStartYRef = useRef<number>(0);
-    const dragLastYRef = useRef<number>(0);
-    const dragLastTimeRef = useRef<number>(0);
+    // اسلات‌های ویدیوی سکانس
+    const videoSlotARef = useRef<HTMLVideoElement | null>(null);
+    const videoSlotBRef = useRef<HTMLVideoElement | null>(null);
+    const transitionVideoRef = useRef<HTMLVideoElement | null>(null);
 
-    // رفرنس‌های فرار از closure
-    const modeRef = useRef<'SCENE' | 'TRANSITION'>('SCENE');
-    modeRef.current = mode;
-
-    const progressRef = useRef<number>(0);
-    progressRef.current = progress;
-
-    const activeEdgeRef = useRef<TransitionEdge | null>(null);
-    activeEdgeRef.current = activeEdge;
-
-    const isReverseRef = useRef<boolean>(false);
-    isReverseRef.current = isReverse;
-
-    // استخراج گره فعلی و شاخص
+    // مشخص کردن گره فعلی و شاخص در گراف
     const currentIndex = graph.nodes.findIndex((n) => n.id === currentNodeId);
     const validIndex = currentIndex >= 0 ? currentIndex : 0;
     const currentNode = graph.nodes[validIndex] || graph.nodes[0];
     const isFirstScene = validIndex === 0;
     const isLastScene = validIndex === graph.nodes.length - 1;
 
-    // پیدا کردن لبه ترنزیشن بعدی و قبلی
+    // پیدا کردن لبه‌های ترنزیشن بعدی و قبلی
     const forwardTransitionEdge: TransitionEdge | undefined =
       currentNode?.transitions?.[0] ||
       (!isLastScene
@@ -131,20 +123,91 @@ export const VideoExperienceManager = forwardRef<
         }
       : undefined;
 
+    // مدیریت اسلات‌های صحنه: Slot A و Slot B
+    const [activeSlot, setActiveSlot] = useState<'A' | 'B'>('A');
+    const [slotASrc, setSlotASrc] = useState<string | undefined>(
+      currentNode.ambientLoop?.landscapeUrl || `/videos/${currentNode.id}.mp4` || undefined
+    );
+    const [slotBSrc, setSlotBSrc] = useState<string | undefined>(() => {
+      const neighborNode = !isLastScene
+        ? graph.nodes[validIndex + 1]
+        : (!isFirstScene ? graph.nodes[validIndex - 1] : null);
+      return neighborNode?.ambientLoop?.landscapeUrl || (neighborNode ? `/videos/${neighborNode.id}.mp4` : undefined);
+    });
+
+    // وضعیت ترنزیشن
+    const [mode, setMode] = useState<'SCENE' | 'TRANSITION'>('SCENE');
+    const [isTransitionVisible, setIsTransitionVisible] = useState(false);
+    const [activeEdge, setActiveEdge] = useState<TransitionEdge | null>(null);
+    const [isReverse, setIsReverse] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+
+    // آدرس فایل ویدیوی ترنزیشن فعال
+    const defaultForwardUrl = !isLastScene
+      ? `/videos/trans-0${validIndex + 1}-to-0${validIndex + 2}.mp4`
+      : (backwardTransitionEdge?.video?.landscapeUrl || undefined);
+    const currentTransitionSrc = activeEdge?.video?.landscapeUrl || defaultForwardUrl || undefined;
+
+    // رفرنس‌های فوری جهت حلقه‌های انیمیشن بدون لگ ری‌رندر
+    const modeRef = useRef<'SCENE' | 'TRANSITION'>('SCENE');
+    modeRef.current = mode;
+
+    const activeSlotRef = useRef<'A' | 'B'>('A');
+    activeSlotRef.current = activeSlot;
+
+    const progressRef = useRef<number>(0);
+    progressRef.current = progress;
+
+    const activeEdgeRef = useRef<TransitionEdge | null>(null);
+    activeEdgeRef.current = activeEdge;
+
+    const isReverseRef = useRef<boolean>(false);
+    isReverseRef.current = isReverse;
+
+    const velocityRef = useRef<number>(0);
+    const inertiaRafRef = useRef<number | null>(null);
+
+    const isDraggingRef = useRef(false);
+    const dragStartYRef = useRef(0);
+    const dragLastYRef = useRef(0);
+    const dragLastTimeRef = useRef(0);
+
+    // پیگیری رویدادهای لود و پخش برای سوئیچ بدون وقفه
+    const isTransitioningOutRef = useRef(false);
+
+    // محاسبه پیشرفت کلی در طول تمام سکانس‌ها (بین 0 تا 1)
+    const totalJourneySteps = Math.max(1, graph.nodes.length - 1);
+    const computeOverall = useCallback(
+      (baseIndex: number, prog: number, reverse: boolean) => {
+        let frac = !reverse ? baseIndex + prog : baseIndex - (1 - prog);
+        return Math.max(0, Math.min(1, frac / totalJourneySteps));
+      },
+      [totalJourneySteps]
+    );
+
     // -------------------------------------------------------------------------
-    // ۲. مدیریت بهینه مموری و بافر دیکودر ویدیو (Purge & Memory Management)
+    // ۲. متدهای اسکراب فریم ویدیوی ترنزیشن
     // -------------------------------------------------------------------------
-    const purgeVideoElement = useCallback((video: HTMLVideoElement | null) => {
-      if (!video) return;
-      try {
-        video.pause();
-        video.removeAttribute('src');
-        video.load(); // تخلیه فوری بافر GPU
-      } catch {
-        // خطاهای احتمالی نادیده گرفته شوند
+    const syncTransitionVideoFrame = useCallback((prog: number) => {
+      const tVideo = transitionVideoRef.current;
+      if (!tVideo) return;
+      const dur = tVideo.duration;
+      if (!dur || isNaN(dur) || dur <= 0) return;
+
+      const targetTime = Math.max(0.001, Math.min(dur - 0.001, prog * dur));
+      if (Math.abs(tVideo.currentTime - targetTime) > 0.015) {
+        if ('fastSeek' in tVideo && typeof (tVideo as any).fastSeek === 'function') {
+          (tVideo as any).fastSeek(targetTime);
+        } else {
+          tVideo.currentTime = targetTime;
+        }
       }
     }, []);
 
+    // -------------------------------------------------------------------------
+    // ۳. مدیریت اینرسی
+    // -------------------------------------------------------------------------
     const stopInertia = useCallback(() => {
       if (inertiaRafRef.current) {
         cancelAnimationFrame(inertiaRafRef.current);
@@ -154,48 +217,147 @@ export const VideoExperienceManager = forwardRef<
     }, []);
 
     // -------------------------------------------------------------------------
-    // ۳. تکمیل ترنزیشن یا بازگشت (Completion & Reversal)
+    // ۴. اتمام ترنزیشن بدون صفحه سیاه (Zero-Black-Screen Handshake)
     // -------------------------------------------------------------------------
     const completeTransition = useCallback(() => {
+      if (isTransitioningOutRef.current) return;
+      isTransitioningOutRef.current = true;
       stopInertia();
+
       const edge = activeEdgeRef.current;
       const reverse = isReverseRef.current;
-
       const targetId = reverse
         ? prevNode?.id || currentNode.id
         : edge?.targetNodeId || currentNode.id;
 
-      purgeVideoElement(transitionVideoRef.current);
+      const targetNode = graph.nodes.find((n) => n.id === targetId) || currentNode;
+      const targetVideoUrl =
+        targetNode.ambientLoop?.landscapeUrl || `/videos/${targetNode.id}.mp4`;
 
-      setMode('SCENE');
-      setActiveEdge(null);
-      setProgress(0);
-      setIsDragging(false);
+      // تعیین اسلات مقصد در معماری دوگانه
+      const currentActive = activeSlotRef.current;
+      const targetSlot: 'A' | 'B' = currentActive === 'A' ? 'B' : 'A';
+      const targetVideoEl =
+        targetSlot === 'A' ? videoSlotARef.current : videoSlotBRef.current;
+      const currentVideoEl =
+        currentActive === 'A' ? videoSlotARef.current : videoSlotBRef.current;
 
-      onNodeChange(targetId);
-      onStatusChange?.('IDLE');
-      onTransitionEnd?.();
-    }, [currentNode.id, onNodeChange, onStatusChange, onTransitionEnd, prevNode?.id, purgeVideoElement, stopInertia]);
+      // تابع نهایی سوئیچ بعد از آغاز رندر فریم‌های ویدیوی جدید
+      const finalizeSceneSwitch = () => {
+        // فعال‌سازی اسلات جدید با شفافیت ۱۰۰٪
+        setActiveSlot(targetSlot);
+        activeSlotRef.current = targetSlot;
 
+        // اکنون که ویدیوی جدید در حال پخش است، ویدیوی ترنزیشن محو می‌شود
+        setIsTransitionVisible(false);
+        setMode('SCENE');
+        setActiveEdge(null);
+        setProgress(0);
+        progressRef.current = 0;
+        setIsDragging(false);
+        isTransitioningOutRef.current = false;
+
+        // توقف ویدیوی قبلی
+        if (currentVideoEl) {
+          try {
+            currentVideoEl.pause();
+          } catch {}
+        }
+
+        // اطلاع‌رسانی به والد و به‌روزرسانی پروگرس بار کلی
+        const targetIdx = graph.nodes.findIndex((n) => n.id === targetId);
+        const resolvedIdx = targetIdx >= 0 ? targetIdx : validIndex;
+        onProgressChange?.(0, resolvedIdx / totalJourneySteps);
+
+        onNodeChange(targetId);
+        onStatusChange?.('IDLE');
+        onTransitionEnd?.();
+      };
+
+      if (!targetVideoEl) {
+        finalizeSceneSwitch();
+        return;
+      }
+
+      // اطمینان از تنظیم سورس اسلات مقصد
+      if (!targetVideoEl.src.endsWith(targetVideoUrl)) {
+        if (targetSlot === 'A') {
+          setSlotASrc(targetVideoUrl);
+        } else {
+          setSlotBSrc(targetVideoUrl);
+        }
+        targetVideoEl.src = targetVideoUrl;
+        targetVideoEl.load();
+      }
+
+      // شنود رویداد پخش: تنها زمانی که فریم واقعی در حال رندر است سوئیچ انجام می‌شود
+      let hasSwitched = false;
+      const onTargetPlaying = () => {
+        if (hasSwitched) return;
+        hasSwitched = true;
+        targetVideoEl.removeEventListener('playing', onTargetPlaying);
+        finalizeSceneSwitch();
+      };
+
+      targetVideoEl.addEventListener('playing', onTargetPlaying, { once: true });
+
+      // پخش اسلات مقصد
+      targetVideoEl.play().catch(() => {
+        // در صورت خطای اتوپلی، بدون توقف سوئیچ انجام می‌شود
+        if (!hasSwitched) {
+          hasSwitched = true;
+          finalizeSceneSwitch();
+        }
+      });
+
+      // زمان‌بندی محافظ جهت تضمین عدم گیر کردن در صورت کندی شبکه
+      setTimeout(() => {
+        if (!hasSwitched) {
+          hasSwitched = true;
+          targetVideoEl.removeEventListener('playing', onTargetPlaying);
+          finalizeSceneSwitch();
+        }
+      }, 500);
+    }, [
+      currentNode,
+      graph.nodes,
+      onNodeChange,
+      onStatusChange,
+      onTransitionEnd,
+      prevNode?.id,
+      stopInertia,
+    ]);
+
+    // بازگشت به مبدأ در صورت کنسل شدن ترنزیشن
     const cancelBackToOrigin = useCallback(() => {
       stopInertia();
-      purgeVideoElement(transitionVideoRef.current);
-
+      setIsTransitionVisible(false);
       setMode('SCENE');
       setActiveEdge(null);
       setProgress(0);
+      progressRef.current = 0;
       setIsDragging(false);
+      isTransitioningOutRef.current = false;
 
+      // اطمینان از ادامه پخش اسلات جاری
+      const currentActive = activeSlotRef.current;
+      const currentVideoEl =
+        currentActive === 'A' ? videoSlotARef.current : videoSlotBRef.current;
+      if (currentVideoEl) {
+        currentVideoEl.play().catch(() => {});
+      }
+
+      onProgressChange?.(0, validIndex / totalJourneySteps);
       onStatusChange?.('IDLE');
       onTransitionEnd?.();
-    }, [onStatusChange, onTransitionEnd, purgeVideoElement, stopInertia]);
+    }, [onProgressChange, onStatusChange, onTransitionEnd, stopInertia, totalJourneySteps, validIndex]);
 
     // -------------------------------------------------------------------------
-    // ۴. شروع ترنزیشن با آماده‌سازی ویدیو در حالت متوقف (Paused & Ready to Scrub)
+    // ۵. شروع ترنزیشن با فیزیک و سورس از پیش‌آماده
     // -------------------------------------------------------------------------
     const startTransition = useCallback(
       (edge: TransitionEdge, reverse: boolean = false, initialVelocity: number = 0) => {
-        if (modeRef.current === 'TRANSITION') return;
+        if (modeRef.current === 'TRANSITION' || isTransitioningOutRef.current) return;
 
         stopInertia();
         setActiveEdge(edge);
@@ -203,36 +365,43 @@ export const VideoExperienceManager = forwardRef<
         const startProg = reverse ? 1 : 0;
         setProgress(startProg);
         progressRef.current = startProg;
+
+        onProgressChange?.(startProg, computeOverall(validIndex, startProg, reverse));
+
         setMode('TRANSITION');
+        setIsTransitionVisible(true);
 
         onStatusChange?.('TRANSITIONING');
         onTransitionStart?.(edge);
 
         const tVideo = transitionVideoRef.current;
         if (tVideo) {
-          const videoUrl =
-            edge.video?.landscapeUrl ||
-            `/videos/trans-0${validIndex + 1}-to-0${validIndex + 2}.mp4`;
-
-          if (tVideo.src !== videoUrl && !tVideo.src.endsWith(videoUrl)) {
+          const videoUrl = edge.video?.landscapeUrl || currentTransitionSrc;
+          if (videoUrl && !tVideo.src.endsWith(videoUrl)) {
             tVideo.src = videoUrl;
+            tVideo.load();
           }
-          tVideo.pause(); // به هیچ عنوان خودکار پخش نشود!
+          tVideo.pause();
           const dur = tVideo.duration || 6;
           tVideo.currentTime = startProg * dur;
         }
 
-        if (Math.abs(initialVelocity) > 0.0001) {
-          velocityRef.current = initialVelocity;
+        // اعمال سرعت اولیه کلمپ‌شده
+        const clampedInitialVel = Math.max(
+          -MAX_INERTIA_VELOCITY,
+          Math.min(MAX_INERTIA_VELOCITY, initialVelocity)
+        );
+
+        if (Math.abs(clampedInitialVel) > 0.0001) {
+          velocityRef.current = clampedInitialVel;
           startInertiaLoop();
         }
       },
-      [onStatusChange, onTransitionStart, stopInertia, validIndex]
+      [computeOverall, currentTransitionSrc, onProgressChange, onStatusChange, onTransitionStart, stopInertia, validIndex]
     );
 
     // -------------------------------------------------------------------------
-    // ۵. حلقه فیزیک اینرسی (Physics Inertia RAF Loop with Damping)
-    // وقتی کاربر کاری نمی‌کند و سرعت صفر می‌شود، پروگرس کاملاً متوقف می‌ماند
+    // ۶. حلقه اینرسی فیزیکی با سقف شتاب
     // -------------------------------------------------------------------------
     const startInertiaLoop = useCallback(() => {
       if (inertiaRafRef.current) {
@@ -240,36 +409,32 @@ export const VideoExperienceManager = forwardRef<
       }
 
       const step = () => {
-        // اگر کاربر در حال لمس/درگ فعال است، حلقه اینرسی منتظر می‌ماند
-        if (isDraggingRef.current) {
+        if (isDraggingRef.current || isTransitioningOutRef.current) {
           inertiaRafRef.current = null;
           return;
         }
 
         const v = velocityRef.current;
-        if (Math.abs(v) < 0.00008) {
-          // اینرسی تمام شد؛ توقف کامل! هیچ حرکتی بدون دستور کاربر اتفاق نمی‌افتد
+        if (Math.abs(v) < VELOCITY_STOP_THRESHOLD) {
+          // سرعت به صفر رسید؛ توقف کامل بدون هیچ پیشروی خودکار!
           velocityRef.current = 0;
           inertiaRafRef.current = null;
           return;
         }
 
-        // اعمال سرعت به پروگرس
         let next = progressRef.current + v;
 
-        // اصطکاک میرایی اینرسی (Damping coefficient) - حس غوطه‌وری و نرمی لوکس
-        velocityRef.current = v * 0.91;
+        // اعمال اصطکاک میرایی ملایم
+        velocityRef.current = v * INERTIA_DAMPING;
 
-        if (next >= 0.99) {
-          // به انتهای ترنزیشن رسیدیم -> ورود به سکانس بعد
+        if (next >= 0.985) {
           setProgress(1);
           progressRef.current = 1;
           completeTransition();
           return;
         }
 
-        if (next <= 0.01 && isReverseRef.current) {
-          // بازگشت کامل به سکانس مبدأ
+        if (next <= 0.015 && isReverseRef.current) {
           setProgress(0);
           progressRef.current = 0;
           cancelBackToOrigin();
@@ -280,38 +445,37 @@ export const VideoExperienceManager = forwardRef<
         setProgress(next);
         progressRef.current = next;
 
-        // هماهنگ‌سازی فریم ویدیو با زمان دقیق پروگرس
-        const tVideo = transitionVideoRef.current;
-        if (tVideo && tVideo.duration) {
-          try {
-            tVideo.currentTime = next * tVideo.duration;
-          } catch {
-            // ignore seek
-          }
-        }
+        onProgressChange?.(next, computeOverall(validIndex, next, isReverseRef.current));
+        syncTransitionVideoFrame(next);
 
         inertiaRafRef.current = requestAnimationFrame(step);
       };
 
       inertiaRafRef.current = requestAnimationFrame(step);
-    }, [cancelBackToOrigin, completeTransition]);
+    }, [cancelBackToOrigin, completeTransition, computeOverall, onProgressChange, syncTransitionVideoFrame, validIndex]);
 
     // -------------------------------------------------------------------------
-    // ۶. اسکراب مستقیم با درگ یا اسکرول (Direct Scrubbing Handlers)
+    // ۷. اسکراب دستی مستقیم (Direct Drag Scrubber)
     // -------------------------------------------------------------------------
     const applyDirectDelta = useCallback(
       (deltaProgress: number, instantVelocity: number) => {
+        if (isTransitioningOutRef.current) return;
         stopInertia();
 
-        let next = progressRef.current + deltaProgress;
-        if (next >= 0.99) {
+        // اعمال لیمیت قطعی برای پیشرفت در هر فرخوانی تا ویدیو هرگز جهش ناگهانی نداشته باشد
+        const clampedDelta =
+          Math.sign(deltaProgress) *
+          Math.min(Math.abs(deltaProgress), MAX_SINGLE_FRAME_DELTA);
+
+        let next = progressRef.current + clampedDelta;
+        if (next >= 0.985) {
           setProgress(1);
           progressRef.current = 1;
           completeTransition();
           return;
         }
 
-        if (next <= 0.01 && isReverseRef.current) {
+        if (next <= 0.015 && isReverseRef.current) {
           setProgress(0);
           progressRef.current = 0;
           cancelBackToOrigin();
@@ -322,30 +486,24 @@ export const VideoExperienceManager = forwardRef<
         setProgress(next);
         progressRef.current = next;
 
-        // تنظیم فریم ویدیو
-        const tVideo = transitionVideoRef.current;
-        if (tVideo && tVideo.duration) {
-          try {
-            tVideo.currentTime = next * tVideo.duration;
-          } catch {
-            // ignore seek
-          }
-        }
+        onProgressChange?.(next, computeOverall(validIndex, next, isReverseRef.current));
+        syncTransitionVideoFrame(next);
 
-        velocityRef.current = instantVelocity;
+        // اعمال لیمیت قطعی برای سرعت اینرسی پس از رهاسازی دست
+        velocityRef.current = Math.max(
+          -MAX_INERTIA_VELOCITY,
+          Math.min(MAX_INERTIA_VELOCITY, instantVelocity)
+        );
       },
-      [cancelBackToOrigin, completeTransition, stopInertia]
+      [cancelBackToOrigin, completeTransition, computeOverall, onProgressChange, stopInertia, syncTransitionVideoFrame, validIndex]
     );
 
     // -------------------------------------------------------------------------
-    // ۷. کنترل جامع رویدادهای ماوس، لمس و اسکرول چرخشی (Touch, Mouse Drag & Wheel)
+    // ۸. شنود رویدادهای تعاملی (ماوس، تاچ، اسکرول و کیبورد) با کنترل سخت‌گیرانه سقف سرعت
     // -------------------------------------------------------------------------
     useEffect(() => {
-      const container = containerRef.current;
-      if (!container) return;
-
-      // الف) ماوس داون / تاچ استارت
       const handleStart = (clientY: number) => {
+        if (isTransitioningOutRef.current) return;
         stopInertia();
         isDraggingRef.current = true;
         setIsDragging(true);
@@ -354,91 +512,101 @@ export const VideoExperienceManager = forwardRef<
         dragLastTimeRef.current = performance.now();
       };
 
-      // ب) ماوس موو / تاچ موو
       const handleMove = (clientY: number) => {
-        if (!isDraggingRef.current) return;
+        if (!isDraggingRef.current || isTransitioningOutRef.current) return;
 
         const now = performance.now();
-        const dt = Math.max(8, now - dragLastTimeRef.current);
-        const dy = dragLastYRef.current - clientY; // کشیدن رو به بالا -> مقدار مثبت
+        const dt = Math.max(8, Math.min(100, now - dragLastTimeRef.current));
+        const dy = dragLastYRef.current - clientY;
         dragLastYRef.current = clientY;
         dragLastTimeRef.current = now;
 
         if (modeRef.current === 'SCENE') {
-          // اگر کاربر در حال مشاهده سکانس است و مسافتی بیشتر از ۱۵ پیکسل کشید:
           const totalDist = dragStartYRef.current - clientY;
           if (totalDist > 20 && !isLastScene && forwardTransitionEdge) {
             isDraggingRef.current = true;
-            startTransition(forwardTransitionEdge, false, 0.008);
+            startTransition(forwardTransitionEdge, false, 0.002);
           } else if (totalDist < -20 && !isFirstScene && backwardTransitionEdge) {
             isDraggingRef.current = true;
-            startTransition(backwardTransitionEdge, true, -0.008);
+            startTransition(backwardTransitionEdge, true, -0.002);
           }
         } else if (modeRef.current === 'TRANSITION') {
-          // در حالت ترنزیشن: کشش دست کاربر مستقیماً ویدیو را جابجا می‌کند
           const screenH = window.innerHeight || 800;
-          const deltaProgress = (dy / screenH) * 1.35; // حساسیت بهینه
-          const currentVel = (deltaProgress / dt) * 16; // سرعت لحظه‌ای نرمال‌شده بر مبنای ۶۰ فریم
+          const rawDelta = (dy / screenH) * 0.35;
+          // لیمیت سخت‌گیرانه سرعت پیشرفت تایم‌لاین ویدیو (حداکثر پیشروی مجاز در بازه میلی‌ثانیه‌ای dt)
+          const maxDeltaForDt = (MAX_PLAYHEAD_SPEED_PER_SEC * dt) / 1000;
+          const speedLimitedDelta =
+            Math.sign(rawDelta) * Math.min(Math.abs(rawDelta), maxDeltaForDt);
 
-          applyDirectDelta(deltaProgress, currentVel);
+          const rawVel = (speedLimitedDelta / dt) * 16;
+          const instantVel = Math.max(
+            -MAX_INERTIA_VELOCITY,
+            Math.min(MAX_INERTIA_VELOCITY, rawVel * 0.18)
+          );
+
+          applyDirectDelta(speedLimitedDelta, instantVel);
         }
       };
 
-      // ج) ماوس آپ / تاچ اند
       const handleEnd = () => {
         if (!isDraggingRef.current) return;
         isDraggingRef.current = false;
         setIsDragging(false);
 
-        if (modeRef.current === 'TRANSITION') {
-          // رها کردن دست -> شروع اینرسی بر اساس آخرین سرعت لمس
+        if (modeRef.current === 'TRANSITION' && !isTransitioningOutRef.current) {
           if (Math.abs(velocityRef.current) > 0.0001) {
             startInertiaLoop();
           }
         }
       };
 
-      // د) ایونت چرخ ماوس و تاچ‌پد (Wheel Event with Inertia)
       const handleWheel = (e: WheelEvent) => {
+        if (isTransitioningOutRef.current) return;
         e.preventDefault();
         const delta = e.deltaY;
 
         if (modeRef.current === 'SCENE') {
           if (delta > 15 && !isLastScene && forwardTransitionEdge) {
-            startTransition(forwardTransitionEdge, false, 0.015);
+            startTransition(forwardTransitionEdge, false, 0.0025);
           } else if (delta < -15 && !isFirstScene && backwardTransitionEdge) {
-            startTransition(backwardTransitionEdge, true, -0.015);
+            startTransition(backwardTransitionEdge, true, -0.0025);
           }
         } else if (modeRef.current === 'TRANSITION') {
-          // تزریق گشتاور و تکانه به اینرسی
-          const deltaProg = delta / 2200;
-          velocityRef.current += deltaProg * 0.45;
+          const rawWheelDelta = (delta / 3200) * 0.1;
+          const maxWheelStep = 0.0018;
+          const clampedWheelDelta =
+            Math.sign(rawWheelDelta) * Math.min(Math.abs(rawWheelDelta), maxWheelStep);
+          const currentV = velocityRef.current;
+          const nextV = Math.max(
+            -MAX_INERTIA_VELOCITY,
+            Math.min(MAX_INERTIA_VELOCITY, currentV + clampedWheelDelta)
+          );
+          velocityRef.current = nextV;
           startInertiaLoop();
         }
       };
 
-      // ه) ایونت کیبورد
       const handleKeyDown = (e: KeyboardEvent) => {
+        if (isTransitioningOutRef.current) return;
         if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
           e.preventDefault();
           if (modeRef.current === 'SCENE' && !isLastScene && forwardTransitionEdge) {
-            startTransition(forwardTransitionEdge, false, 0.018);
+            startTransition(forwardTransitionEdge, false, 0.0025);
           } else if (modeRef.current === 'TRANSITION') {
-            velocityRef.current += 0.018;
+            velocityRef.current = Math.min(MAX_INERTIA_VELOCITY, velocityRef.current + 0.0025);
             startInertiaLoop();
           }
         } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
           e.preventDefault();
           if (modeRef.current === 'SCENE' && !isFirstScene && backwardTransitionEdge) {
-            startTransition(backwardTransitionEdge, true, -0.018);
+            startTransition(backwardTransitionEdge, true, -0.0025);
           } else if (modeRef.current === 'TRANSITION') {
-            velocityRef.current -= 0.018;
+            velocityRef.current = Math.max(-MAX_INERTIA_VELOCITY, velocityRef.current - 0.0025);
             startInertiaLoop();
           }
         }
       };
 
-      // اتصال Listenerها
       const onMouseDown = (e: MouseEvent) => {
         if ((e.target as HTMLElement)?.closest('button, nav, header')) return;
         handleStart(e.clientY);
@@ -448,10 +616,10 @@ export const VideoExperienceManager = forwardRef<
 
       const onTouchStart = (e: TouchEvent) => {
         if ((e.target as HTMLElement)?.closest('button, nav, header')) return;
-        if (e.touches[0]) handleStart(e.touches[0].clientY);
+        if (e.touches.length > 0) handleStart(e.touches[0].clientY);
       };
       const onTouchMove = (e: TouchEvent) => {
-        if (e.touches[0]) handleMove(e.touches[0].clientY);
+        if (e.touches.length > 0) handleMove(e.touches[0].clientY);
       };
       const onTouchEnd = () => handleEnd();
 
@@ -461,7 +629,7 @@ export const VideoExperienceManager = forwardRef<
 
       window.addEventListener('touchstart', onTouchStart, { passive: true });
       window.addEventListener('touchmove', onTouchMove, { passive: true });
-      window.addEventListener('touchend', onTouchEnd);
+      window.addEventListener('touchend', onTouchEnd, { passive: true });
 
       window.addEventListener('wheel', handleWheel, { passive: false });
       window.addEventListener('keydown', handleKeyDown);
@@ -490,45 +658,142 @@ export const VideoExperienceManager = forwardRef<
     ]);
 
     // -------------------------------------------------------------------------
-    // ۸. پخش ویدیوی سکانس اصلی (Scene Loop Video)
+    // ۹. همگام‌سازی نود جاری و آماده‌سازی پس‌زمینه اسلات‌ها و ترنزیشن
     // -------------------------------------------------------------------------
     useEffect(() => {
-      const sVideo = sceneVideoRef.current;
-      if (!sVideo) return;
+      // آماده‌سازی اسلات‌ها بر مبنای نود جاری
+      const currentUrl = currentNode.ambientLoop?.landscapeUrl || `/videos/${currentNode.id}.mp4`;
+      const currentActive = activeSlotRef.current;
 
-      const targetSrc = currentNode.ambientLoop?.landscapeUrl || `/videos/${currentNode.id}.mp4`;
-      if (sVideo.src !== targetSrc && !sVideo.src.endsWith(targetSrc)) {
-        sVideo.src = targetSrc;
+      if (currentActive === 'A') {
+        const videoA = videoSlotARef.current;
+        if (videoA && (!videoA.src || !videoA.src.endsWith(currentUrl))) {
+          videoA.src = currentUrl;
+          videoA.play().catch(() => {});
+        }
+        // آماده‌سازی اسلات B با نود مجاور (بعدی یا قبلی) جهت سوئیچ فوری
+        const standbyNode = !isLastScene
+          ? graph.nodes[validIndex + 1]
+          : (!isFirstScene ? graph.nodes[validIndex - 1] : null);
+        if (standbyNode) {
+          const nextUrl = standbyNode.ambientLoop?.landscapeUrl || `/videos/${standbyNode.id}.mp4`;
+          const videoB = videoSlotBRef.current;
+          if (videoB && !videoB.src.endsWith(nextUrl)) {
+            setSlotBSrc(nextUrl);
+            videoB.src = nextUrl;
+            videoB.load();
+          }
+        }
+      } else {
+        const videoB = videoSlotBRef.current;
+        if (videoB && (!videoB.src || !videoB.src.endsWith(currentUrl))) {
+          videoB.src = currentUrl;
+          videoB.play().catch(() => {});
+        }
+        // آماده‌سازی اسلات A با نود مجاور
+        const standbyNode = !isLastScene
+          ? graph.nodes[validIndex + 1]
+          : (!isFirstScene ? graph.nodes[validIndex - 1] : null);
+        if (standbyNode) {
+          const nextUrl = standbyNode.ambientLoop?.landscapeUrl || `/videos/${standbyNode.id}.mp4`;
+          const videoA = videoSlotARef.current;
+          if (videoA && !videoA.src.endsWith(nextUrl)) {
+            setSlotASrc(nextUrl);
+            videoA.src = nextUrl;
+            videoA.load();
+          }
+        }
       }
-      sVideo.play().catch(() => {});
-    }, [currentNode]);
+
+      // آماده‌سازی ویدیوی ترنزیشن در پس‌زمینه در صورت وجود آدرس معتبر
+      const tVideo = transitionVideoRef.current;
+      if (tVideo && defaultForwardUrl && typeof defaultForwardUrl === 'string' && defaultForwardUrl.trim() !== '') {
+        if (!tVideo.src.endsWith(defaultForwardUrl)) {
+          tVideo.src = defaultForwardUrl;
+          tVideo.load();
+        }
+      }
+
+      // همگام‌سازی حافظه لغزان (نود قبلی، فعلی و بعدی)
+      preloadManager.syncSlidingWindow(graph.nodes, validIndex);
+
+      // به‌روزرسانی پروگرس بار کلی
+      onProgressChange?.(0, validIndex / totalJourneySteps);
+    }, [currentNode, defaultForwardUrl, graph.nodes, isLastScene, onProgressChange, totalJourneySteps, validIndex]);
 
     // -------------------------------------------------------------------------
-    // ۹. رفرنس بیرونی (Imperative Handle)
+    // ۱۰. هندل متدهای خارجی (Imperative Handle)
     // -------------------------------------------------------------------------
     useImperativeHandle(
       ref,
       () => ({
         goToNext: () => {
           if (!isLastScene && forwardTransitionEdge) {
-            startTransition(forwardTransitionEdge, false, 0.02);
+            startTransition(forwardTransitionEdge, false, 0.0035);
           }
         },
         goToPrev: () => {
           if (!isFirstScene && backwardTransitionEdge) {
-            startTransition(backwardTransitionEdge, true, -0.02);
+            startTransition(backwardTransitionEdge, true, -0.0035);
           }
         },
         jumpToNode: (nodeId: string) => {
-          if (nodeId === currentNode.id) return;
+          if (nodeId === currentNode.id || isTransitioningOutRef.current) return;
           stopInertia();
-          purgeVideoElement(transitionVideoRef.current);
-          setMode('SCENE');
-          setActiveEdge(null);
-          setProgress(0);
-          onNodeChange(nodeId);
-          onStatusChange?.('IDLE');
-          onTransitionEnd?.();
+
+          const targetNode = graph.nodes.find((n) => n.id === nodeId);
+          if (!targetNode) return;
+          const targetUrl =
+            targetNode.ambientLoop?.landscapeUrl || `/videos/${targetNode.id}.mp4`;
+
+          // پرش سریع با کراس‌فید بدون صفحه سیاه بین اسلات‌ها
+          const currentActive = activeSlotRef.current;
+          const targetSlot: 'A' | 'B' = currentActive === 'A' ? 'B' : 'A';
+          const targetVideoEl =
+            targetSlot === 'A' ? videoSlotARef.current : videoSlotBRef.current;
+          const currentVideoEl =
+            currentActive === 'A' ? videoSlotARef.current : videoSlotBRef.current;
+
+          if (!targetVideoEl) {
+            onNodeChange(nodeId);
+            return;
+          }
+
+          if (targetSlot === 'A') setSlotASrc(targetUrl);
+          else setSlotBSrc(targetUrl);
+
+          targetVideoEl.src = targetUrl;
+          targetVideoEl.load();
+
+          let switched = false;
+          const onPlaying = () => {
+            if (switched) return;
+            switched = true;
+            targetVideoEl.removeEventListener('playing', onPlaying);
+            setActiveSlot(targetSlot);
+            activeSlotRef.current = targetSlot;
+            setIsTransitionVisible(false);
+            setMode('SCENE');
+            if (currentVideoEl) {
+              try {
+                currentVideoEl.pause();
+              } catch {}
+            }
+            const tIdx = graph.nodes.findIndex((n) => n.id === nodeId);
+            if (tIdx >= 0) {
+              onProgressChange?.(0, tIdx / totalJourneySteps);
+            }
+            onNodeChange(nodeId);
+          };
+
+          targetVideoEl.addEventListener('playing', onPlaying, { once: true });
+          targetVideoEl.play().catch(() => {
+            if (!switched) onPlaying();
+          });
+
+          setTimeout(() => {
+            if (!switched) onPlaying();
+          }, 450);
         },
         cancelTransition: cancelBackToOrigin,
       }),
@@ -537,96 +802,75 @@ export const VideoExperienceManager = forwardRef<
         currentNode.id,
         forwardTransitionEdge,
         backwardTransitionEdge,
+        graph.nodes,
         isFirstScene,
         isLastScene,
         onNodeChange,
-        onStatusChange,
-        onTransitionEnd,
-        purgeVideoElement,
         startTransition,
         stopInertia,
       ]
     );
 
-    // آدرس فایل ویدیوی ترنزیشن جاری
-    const transitionVideoSrc =
-      activeEdge?.video?.landscapeUrl ||
-      `/videos/trans-0${validIndex + 1}-to-0${validIndex + 2}.mp4`;
-
     return (
       <div
         ref={containerRef}
-        className={`relative w-screen h-screen overflow-hidden bg-black select-none font-['Vazirmatn'] ${
+        className={`relative w-screen h-screen overflow-hidden bg-neutral-950 select-none font-['Vazirmatn'] ${
           isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
       >
-        {/* ۱. ویدیوی سکانس اصلی - با کیفیت عالی در پس‌زمینه */}
+        {/* ۱. اسلات ویدیویی A سکانس */}
         <video
-          ref={sceneVideoRef}
-          src={currentNode.ambientLoop?.landscapeUrl || `/videos/${currentNode.id}.mp4`}
-          poster={currentNode.ambientLoop?.posterUrl}
+          ref={videoSlotARef}
+          src={slotASrc || undefined}
           playsInline
           muted
           loop
           autoPlay
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out ${
-            mode === 'TRANSITION' ? 'opacity-0 scale-105' : 'opacity-100 scale-100'
+          className={`absolute inset-0 w-full h-full object-cover select-none pointer-events-none transition-opacity duration-300 ${
+            activeSlot === 'A' ? 'opacity-100 z-10' : 'opacity-0 z-0'
           }`}
         />
 
-        {/* ۲. ویدیوی ترنزیشن بین‌سکانسی - کنترل ۱۰۰٪ وابسته به کشیدن و اینرسی */}
-        {mode === 'TRANSITION' && (
-          <div className="absolute inset-0 z-10 w-full h-full bg-black">
-            <video
-              ref={transitionVideoRef}
-              src={transitionVideoSrc}
-              playsInline
-              muted
-              autoPlay={false} // مطلقا اتوپلی ندارد
-              preload="auto"
-              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+        {/* ۲. اسلات ویدیویی B سکانس (بافر دوگانه جهت سوئیچ بدون وقفه) */}
+        <video
+          ref={videoSlotBRef}
+          src={slotBSrc || undefined}
+          playsInline
+          muted
+          loop
+          className={`absolute inset-0 w-full h-full object-cover select-none pointer-events-none transition-opacity duration-300 ${
+            activeSlot === 'B' ? 'opacity-100 z-10' : 'opacity-0 z-0'
+          }`}
+        />
+
+        {/* ۳. ویدیوی ترنزیشن پیوسته در لایه فوقانی (Z-20) */}
+        <video
+          ref={transitionVideoRef}
+          src={currentTransitionSrc || undefined}
+          playsInline
+          muted
+          autoPlay={false}
+          preload="auto"
+          className={`absolute inset-0 w-full h-full object-cover select-none pointer-events-none transition-opacity duration-150 ${
+            isTransitionVisible ? 'opacity-100 z-20' : 'opacity-0 pointer-events-none z-0'
+          }`}
+        />
+
+        {/* ۴. پروگرس‌بار خطی نازک کف ویوپورت برای نودهای ترنزیشن سکانس */}
+        <div
+          className={`fixed bottom-0 inset-x-0 z-30 pointer-events-none transition-opacity duration-200 ${
+            mode === 'TRANSITION' ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          {/* تراک باریک محو در کف صفحه */}
+          <div className="h-[2px] w-full bg-white/10 backdrop-blur-sm">
+            {/* خط پرشده طلایی که پیشرفت دقیق ترنزیشن بین دو سکانس را نمایش می‌دهد */}
+            <div
+              className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-200 transition-[width] duration-75 ease-out shadow-[0_0_8px_rgba(251,191,36,0.7)]"
+              style={{ width: `${Math.max(0, Math.min(100, progress * 100))}%` }}
             />
-
-            {/* نشانگر بسیار مینیمال اینرسی و کشیدن در بالای خط پیشرفت */}
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-col items-center gap-1.5 opacity-80 transition-opacity">
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-950/70 border border-white/10 backdrop-blur-md text-[11px] text-amber-200/90 shadow-xl">
-                <MoveVertical className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                <span>برای حرکت بکشید</span>
-                <span className="w-1 h-1 rounded-full bg-white/20" />
-                <span className="font-mono text-amber-300 font-medium">
-                  {Math.round(progress * 100)}%
-                </span>
-              </div>
-            </div>
-
-            {/* خط باریک پیشرفت اینرسی در پایین صفحه */}
-            <div className="absolute bottom-0 inset-x-0 h-1 bg-white/10 z-20">
-              <div
-                className="h-full bg-gradient-to-r from-amber-400 to-amber-200 transition-[width] duration-75"
-                style={{ width: `${Math.max(2, Math.round(progress * 100))}%` }}
-              />
-            </div>
           </div>
-        )}
-
-        {/* ۳. راهنمای بسیار ملایم کشیدن/اسکرول در حالت سکانس */}
-        {mode === 'SCENE' && !isLastScene && (
-          <button
-            type="button"
-            onClick={() => {
-              if (forwardTransitionEdge) startTransition(forwardTransitionEdge, false, 0.015);
-            }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-950/60 hover:bg-neutral-900/80 border border-white/10 hover:border-amber-400/40 backdrop-blur-md transition-all cursor-pointer group shadow-xl"
-            title="برای ورود به ترنزیشن بکشید یا اسکرول کنید"
-          >
-            <span className="text-[11px] text-neutral-300 group-hover:text-amber-200 transition-colors font-light">
-              بکشید یا اسکرول کنید
-            </span>
-            <div className="w-4 h-4 rounded-full border border-amber-400/50 flex items-center justify-center text-amber-300 group-hover:translate-y-0.5 transition-transform">
-              <span className="text-[9px]">↓</span>
-            </div>
-          </button>
-        )}
+        </div>
       </div>
     );
   }

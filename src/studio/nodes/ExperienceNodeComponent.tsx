@@ -45,7 +45,7 @@ export const ExperienceNodeComponent: React.FC<ExperienceNodeProps> = memo(({ id
 
       {/* Media Thumbnail & Overlay Stack */}
       <div className="relative h-32 w-full bg-neutral-950 overflow-hidden">
-        {data.primaryMedia?.posterUrl ? (
+        {data.primaryMedia?.posterUrl && data.primaryMedia.posterUrl.trim() !== '' ? (
           <img
             src={data.primaryMedia.posterUrl}
             alt={data.title}

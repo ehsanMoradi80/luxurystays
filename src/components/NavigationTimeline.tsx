@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, VolumeX, MapPin, Shield, Sparkles, Workflow, Compass, CalendarCheck } from 'lucide-react';
+import { Volume2, VolumeX, Sparkles, Workflow, Compass, CalendarCheck } from 'lucide-react';
 import { SequenceNode } from '../types/sequenceGraph';
 
 interface NavigationTimelineProps {
@@ -25,30 +25,25 @@ export const NavigationTimeline: React.FC<NavigationTimelineProps> = ({
   onSelectNode,
   onOpenBooking,
   onOpenMap,
-  onOpenAdmin,
   onOpenStudio,
   isMuted,
   onToggleMute,
   isTransitioning = false,
 }) => {
-  const currentIndex = nodes.findIndex((n) => n.id === currentNodeId);
-
   return (
-    <header className="fixed top-0 inset-x-0 z-40 px-4 sm:px-8 py-3.5 flex items-center justify-between pointer-events-none select-none font-['Vazirmatn']">
-      {/* Brand: Luxury Emblem & Title */}
-      <div className="flex items-center gap-3 pointer-events-auto">
-        <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-neutral-950/70 backdrop-blur-xl border border-white/10 shadow-xl hover:border-amber-400/30 transition-colors">
-          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-500/20 to-amber-300/30 border border-amber-400/40 flex items-center justify-center">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-          </div>
-          <span className="font-serif text-sm font-semibold tracking-widest text-amber-100 uppercase">
+    <header className="fixed top-0 inset-x-0 z-40 px-4 sm:px-6 py-3 flex items-center justify-between pointer-events-none select-none font-['Vazirmatn']">
+      {/* لوگوی مینیمال هتل */}
+      <div className="flex items-center gap-2 pointer-events-auto">
+        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-950/60 backdrop-blur-xl border border-white/10 shadow-lg">
+          <Sparkles className="w-3 h-3 text-amber-300" />
+          <span className="font-serif text-xs font-medium tracking-widest text-amber-100/90 uppercase">
             Laura Palace
           </span>
         </div>
       </div>
 
-      {/* Center: Delicate Scene Dots Navigation */}
-      <nav className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-950/70 backdrop-blur-xl border border-white/10 shadow-xl pointer-events-auto">
+      {/* نقطه چین ناوبری فضاهای هتل */}
+      <nav className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-neutral-950/60 backdrop-blur-xl border border-white/10 shadow-lg pointer-events-auto">
         {nodes.map((node, index) => {
           const isActive = node.id === currentNodeId;
           return (
@@ -57,92 +52,73 @@ export const NavigationTimeline: React.FC<NavigationTimelineProps> = ({
               onClick={() => onSelectNode(node.id)}
               disabled={isTransitioning}
               title={`${index + 1}. ${node.persianTitle}`}
-              className={`relative px-2.5 py-1 rounded-full text-xs transition-all duration-300 flex items-center gap-1.5 cursor-pointer ${
+              className={`relative px-2 py-0.5 rounded-full text-[11px] transition-all duration-300 flex items-center gap-1.5 cursor-pointer ${
                 isActive
-                  ? 'bg-amber-400/15 text-amber-300 border border-amber-400/40 font-medium shadow-[0_0_12px_rgba(251,191,36,0.15)]'
-                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-white/5 border border-transparent'
+                  ? 'bg-amber-400/20 text-amber-200 border border-amber-400/40 font-medium'
+                  : 'text-neutral-400 hover:text-neutral-200 border border-transparent'
               }`}
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full transition-all ${
-                  isActive ? 'bg-amber-400 scale-125' : 'bg-neutral-600'
+                  isActive ? 'bg-amber-300 scale-125' : 'bg-neutral-600'
                 }`}
               />
-              <span className="text-[11px] hidden lg:inline">{node.persianTitle}</span>
+              <span className="hidden md:inline">{node.persianTitle}</span>
             </button>
           );
         })}
       </nav>
 
-      {/* Right Controls: Redesigned Aesthetic Luxury Pill Buttons */}
-      <div className="flex items-center gap-2 pointer-events-auto">
-        {/* Reservation / Booking CTA Pill */}
+      {/* دکمه‌های کنترل مینیمال هدر */}
+      <div className="flex items-center gap-1.5 pointer-events-auto">
+        {/* دکمه رزرو */}
         {onOpenBooking && (
           <button
             onClick={onOpenBooking}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 via-amber-400/20 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-400/30 border border-amber-400/40 hover:border-amber-400/70 text-amber-200 hover:text-amber-100 text-xs font-medium backdrop-blur-xl shadow-lg shadow-amber-500/5 transition-all cursor-pointer active:scale-95"
-            title="رزرو اختصاصی سوئیت‌ها و اقامتگاه"
+            className="flex items-center gap-1 px-3 py-1 rounded-full bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/30 text-amber-200 text-xs backdrop-blur-xl transition-all cursor-pointer active:scale-95"
+            title="رزرو اقامت"
           >
-            <CalendarCheck className="w-3.5 h-3.5 text-amber-300" />
-            <span>رزرو اقامت</span>
+            <CalendarCheck className="w-3 h-3 text-amber-300" />
+            <span>رزرو</span>
           </button>
         )}
 
-        {/* Ambient Meditation Sound Toggle */}
+        {/* دکمه صدا */}
         <button
           onClick={onToggleMute}
-          title={isMuted ? 'پخش صدای آرامش‌بخش مدیتیشن ۴۳۲Hz' : 'قطع صدای مدیتیشن'}
-          className={`h-8 px-2.5 rounded-full backdrop-blur-xl border flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+          title={isMuted ? 'پخش صدا' : 'قطع صدا'}
+          className={`w-7 h-7 rounded-full backdrop-blur-xl border flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
             isMuted
-              ? 'bg-neutral-950/70 border-white/10 text-neutral-400 hover:text-neutral-200'
-              : 'bg-amber-400/10 border-amber-400/30 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.1)]'
+              ? 'bg-neutral-950/60 border-white/10 text-neutral-400 hover:text-white'
+              : 'bg-amber-400/10 border-amber-400/30 text-amber-300'
           }`}
         >
           {isMuted ? (
-            <VolumeX className="w-3.5 h-3.5 text-red-400" />
+            <VolumeX className="w-3 h-3 text-neutral-400" />
           ) : (
-            <>
-              <Volume2 className="w-3.5 h-3.5 text-amber-300" />
-              {/* Subtle sound wave visualizer */}
-              <span className="flex items-center gap-0.5 h-2.5">
-                <span className="w-0.5 h-2 bg-amber-400/80 rounded-full animate-pulse" />
-                <span className="w-0.5 h-3 bg-amber-400 rounded-full animate-pulse [animation-delay:150ms]" />
-                <span className="w-0.5 h-1.5 bg-amber-400/60 rounded-full animate-pulse [animation-delay:300ms]" />
-              </span>
-            </>
+            <Volume2 className="w-3 h-3 text-amber-300" />
           )}
         </button>
 
-        {/* Hotel Map Atlas */}
+        {/* دکمه نقشه فضایی */}
         {onOpenMap && (
           <button
             onClick={onOpenMap}
-            title="نقشه فضایی هتل"
-            className="w-8 h-8 rounded-full bg-neutral-950/70 border border-white/10 hover:border-amber-400/40 text-neutral-300 hover:text-amber-300 backdrop-blur-xl flex items-center justify-center transition-all cursor-pointer active:scale-95"
+            title="نقشه هتل"
+            className="w-7 h-7 rounded-full bg-neutral-950/60 border border-white/10 hover:border-amber-400/30 text-neutral-400 hover:text-amber-200 backdrop-blur-xl flex items-center justify-center transition-all cursor-pointer active:scale-95"
           >
-            <Compass className="w-3.5 h-3.5" />
+            <Compass className="w-3 h-3" />
           </button>
         )}
 
-        {/* Visual Builder Studio */}
+        {/* استودیو کانواس نودها */}
         {onOpenStudio && (
           <button
             onClick={onOpenStudio}
-            title="کانواس نود-بیس طراحی تجربه (Studio)"
-            className="w-8 h-8 rounded-full bg-neutral-950/70 border border-white/10 hover:border-amber-400/40 text-neutral-300 hover:text-amber-300 backdrop-blur-xl flex items-center justify-center transition-all cursor-pointer active:scale-95"
+            title="کانواس طراحی (Studio)"
+            className="w-7 h-7 rounded-full bg-neutral-950/60 border border-white/10 hover:border-amber-400/30 text-neutral-400 hover:text-amber-200 backdrop-blur-xl flex items-center justify-center transition-all cursor-pointer active:scale-95"
           >
-            <Workflow className="w-3.5 h-3.5" />
-          </button>
-        )}
-
-        {/* Admin Dashboard */}
-        {onOpenAdmin && (
-          <button
-            onClick={onOpenAdmin}
-            title="پنل مدیریت هتل"
-            className="hidden sm:flex w-8 h-8 rounded-full bg-neutral-950/70 border border-white/10 hover:border-amber-400/40 text-neutral-400 hover:text-amber-300 backdrop-blur-xl items-center justify-center transition-all cursor-pointer active:scale-95"
-          >
-            <Shield className="w-3.5 h-3.5" />
+            <Workflow className="w-3 h-3" />
           </button>
         )}
       </div>

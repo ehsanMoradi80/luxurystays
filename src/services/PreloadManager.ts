@@ -61,9 +61,14 @@ export class VideoPreloadManager {
   /**
    * Selects the proper URL variant based on detected orientation.
    */
-  public resolveMediaUrl(media: VideoMediaVariant, orientation?: ScreenOrientation): string {
+  public resolveMediaUrl(media: VideoMediaVariant | any, orientation?: ScreenOrientation): string {
+    if (!media) return '';
+    if (typeof media === 'string') return media;
     const currentOrientation = orientation || this.getDeviceOrientation();
-    return currentOrientation === 'portrait' ? media.portraitUrl : media.landscapeUrl;
+    if (currentOrientation === 'portrait' && media.portraitUrl) {
+      return media.portraitUrl;
+    }
+    return media.landscapeUrl || media.desktopUrl || '';
   }
 
   /** 
@@ -230,69 +235,131 @@ export class VideoPreloadManager {
     }
 
   /**
-     * Intelligently preloads all adjacent nodes and transitions for the current node.
-     * This guarantees that when a user triggers a transition (via click or scroll),
-     * the video is already primed in the GPU/memory buffer.
-     * Includes multi-level neighborhood depth (direct outgoing transitions, their destination ambient loops, and secondary neighbors).
-     * Also preloads audio files for scenes and transitions if available.
-     */
-    public preloadNodeNeighborhood(
-      graph: HotelExperienceGraph,
-      currentNodeId: string,
-      orientation?: ScreenOrientation
-    ): void {
-      const currentNode = graph.nodes.find((n) => n.id === currentNodeId);
-      if (!currentNode) return;
-
-      const currentOrient = orientation || this.getDeviceOrientation();
-
-      // 1. Priority 1: Ensure current space's ambient loop video is ready
-      const currentLoopUrl = this.resolveMediaUrl(currentNode.ambientLoop, currentOrient);
-      this.preloadVideo(currentLoopUrl);
-
-      // 2. Priority 2: Preload all direct outgoing transitions from this node
-      currentNode.transitions.forEach((edge) => {
-        const transitionUrl = this.resolveMediaUrl(edge.video, currentOrient);
-        this.preloadVideo(transitionUrl);
-      
-        // Preload transition audio if available
-        if (edge.audioUrl) {
-          this.preloadAudio(edge.audioUrl);
-        }
-        if (edge.reverseAudioUrl) {
-          this.preloadAudio(edge.reverseAudioUrl);
-        }
-
-        // 3. Priority 3: Preload ambient loop of target space for each transition
-        const targetNode = graph.nodes.find((n) => n.id === edge.targetNodeId);
-        if (targetNode) {
-          const targetLoopUrl = this.resolveMediaUrl(targetNode.ambientLoop, currentOrient);
-          this.preloadVideo(targetLoopUrl);
-        
-          // Preload target scene audio if available
-          if ((targetNode.ambientLoop as any).audioUrl) {
-            this.preloadAudio((targetNode.ambientLoop as any).audioUrl);
-          }
-
-          // 4. Smart preload step 2 (neighbors of target node for consecutive navigation without loading)
-          targetNode.transitions.forEach((secondaryEdge) => {
-            const secondaryTransitionUrl = this.resolveMediaUrl(secondaryEdge.video, currentOrient);
-            // Execute with background priority
-            setTimeout(() => {
-              this.preloadVideo(secondaryTransitionUrl);
-            
-              // Preload secondary transition audio if available
-              if (secondaryEdge.audioUrl) {
-                this.preloadAudio(secondaryEdge.audioUrl);
-              }
-              if (secondaryEdge.reverseAudioUrl) {
-                this.preloadAudio(secondaryEdge.reverseAudioUrl);
-              }
-            }, 400);
-          });
-        }
-      });
+   * Strictly maintains only the current node and its immediate adjacent neighbors
+   * (previous node and next node, if existing) in memory.
+   * Evicts and purges all video elements and hardware decoder buffers for any node
+   * outside the [currentIndex - 1, currentIndex, currentIndex + 1] sliding window.
+   */
+  public syncSlidingWindow(
+    nodes: any[],
+    currentIndex: number
+  ): {
+    retainedUrls: string[];
+    evictedUrls: string[];
+    preloadedUrls: string[];
+  } {
+    if (!nodes || nodes.length === 0 || currentIndex < 0 || currentIndex >= nodes.length) {
+      return { retainedUrls: [], evictedUrls: [], preloadedUrls: [] };
     }
+
+    const orientation = this.getDeviceOrientation();
+    const keptUrls = new Set<string>();
+
+    const safeIndex = Math.max(0, Math.min(nodes.length - 1, currentIndex));
+    const prevIndex = safeIndex > 0 ? safeIndex - 1 : null;
+    const nextIndex = safeIndex < nodes.length - 1 ? safeIndex + 1 : null;
+
+    const allowedIndices = [safeIndex];
+    if (prevIndex !== null) allowedIndices.push(prevIndex);
+    if (nextIndex !== null) allowedIndices.push(nextIndex);
+
+    // ۱. استخراج دقیق URLهای مجاز در پنجره کشویی [قبلی، فعلی، بعدی]
+    allowedIndices.forEach((idx) => {
+      const node = nodes[idx];
+      if (!node) return;
+
+      // ویدیوی امبینت لوپ سکانس
+      if (node.ambientLoop) {
+        const url = this.resolveMediaUrl(node.ambientLoop, orientation) || `/videos/${node.id}.mp4`;
+        if (url) keptUrls.add(url);
+      } else if (node.id) {
+        keptUrls.add(`/videos/${node.id}.mp4`);
+      }
+
+      // ویدیوهای ترنزیشن مستقیم متصل به این گره‌ها در محدوده مجاز
+      if (node.transitions && Array.isArray(node.transitions)) {
+        node.transitions.forEach((t: any) => {
+          const targetIdx = nodes.findIndex((n: any) => n.id === t.targetNodeId);
+          // ترنزیشن فقط در صورتی حفظ می‌شود که بین نودهای پنجره فعال باشد
+          if (targetIdx !== -1 && Math.abs(targetIdx - safeIndex) <= 1) {
+            const transUrl = t.video ? this.resolveMediaUrl(t.video, orientation) : null;
+            if (transUrl) keptUrls.add(transUrl);
+            if (t.reverseVideo) {
+              const revUrl = this.resolveMediaUrl(t.reverseVideo, orientation);
+              if (revUrl) keptUrls.add(revUrl);
+            }
+          }
+        });
+      }
+    });
+
+    // همچنین افزودن فایل‌های ترنزیشن استاندارد مجاور در صورت وجود
+    if (prevIndex !== null) {
+      keptUrls.add(`/videos/trans-0${prevIndex + 1}-to-0${prevIndex + 2}.mp4`);
+    }
+    if (nextIndex !== null) {
+      keptUrls.add(`/videos/trans-0${safeIndex + 1}-to-0${safeIndex + 2}.mp4`);
+    }
+
+    // ۲. تخلیه بی‌رحمانه و آزادسازی فوری حافظه GPU/RAM برای هر ویدیویی خارج از این پنجره (Strict Eviction)
+    const evictedUrls: string[] = [];
+    for (const [url, videoEl] of this.cache.entries()) {
+      if (!keptUrls.has(url)) {
+        try {
+          videoEl.pause();
+          videoEl.removeAttribute('src');
+          videoEl.load(); // دستور استاندارد W3C جهت آزادسازی بافر دیکودر سخت‌افزاری
+        } catch {}
+        this.cache.delete(url);
+        this.primedVideoDecoders.delete(url);
+        evictedUrls.push(url);
+
+        if (this.blobUrls.has(url)) {
+          try {
+            URL.revokeObjectURL(this.blobUrls.get(url)!);
+          } catch {}
+          this.blobUrls.delete(url);
+        }
+      }
+    }
+
+    // لغو درخواست‌های لود معلق برای ویدیوهای خارج از پنجره
+    for (const reqUrl of this.activePreloadRequests) {
+      if (!keptUrls.has(reqUrl)) {
+        this.activePreloadRequests.delete(reqUrl);
+      }
+    }
+
+    // ۳. بارگذاری پیش‌دستانه (Preload) صرفاً برای نود قبلی و نود بعدی که هنوز در کش نیستند
+    const preloadedUrls: string[] = [];
+    keptUrls.forEach((url) => {
+      if (!this.cache.has(url) && !this.activePreloadRequests.has(url)) {
+        this.preloadVideo(url);
+        preloadedUrls.push(url);
+      }
+    });
+
+    this.notifyProgress();
+
+    return {
+      retainedUrls: Array.from(keptUrls),
+      evictedUrls,
+      preloadedUrls,
+    };
+  }
+
+  /**
+   * سازگاری با متد قبلی: فراخوانی پنجره کشویی برای گره جاری
+   */
+  public preloadNodeNeighborhood(
+    graph: HotelExperienceGraph,
+    currentNodeId: string,
+    _orientation?: ScreenOrientation
+  ): void {
+    const currentIndex = graph.nodes.findIndex((n) => n.id === currentNodeId);
+    if (currentIndex === -1) return;
+    this.syncSlidingWindow(graph.nodes, currentIndex);
+  }
 
   public getCachedVideo(url: string): HTMLVideoElement | undefined {
     return this.cache.get(url);
@@ -606,7 +673,7 @@ export class VideoPreloadManager {
     if (img) {
       img.onload = null;
       img.onerror = null;
-      img.src = '';
+      img.removeAttribute('src');
       this.placeholderTextureCache.delete(url);
     }
   }
@@ -871,7 +938,7 @@ export class VideoPreloadManager {
       for (const img of this.placeholderTextureCache.values()) {
         img.onload = null;
         img.onerror = null;
-        img.src = '';
+        img.removeAttribute('src');
       }
       this.placeholderTextureCache.clear();
 

@@ -124,6 +124,27 @@ export const DedicatedExperiencePlayer: React.FC<DedicatedExperiencePlayerProps>
     });
   }, [currentSeqId, sequences, transitions, currentIndex]);
 
+  // تخلیه و آزادسازی کامل حافظه هنگام خروج از تجربه اختصاصی
+  useEffect(() => {
+    return () => {
+      if (loopVideoRef.current) {
+        try {
+          loopVideoRef.current.pause();
+          loopVideoRef.current.removeAttribute('src');
+          loopVideoRef.current.load();
+        } catch {}
+      }
+      if (transVideoRef.current) {
+        try {
+          transVideoRef.current.pause();
+          transVideoRef.current.removeAttribute('src');
+          transVideoRef.current.load();
+        } catch {}
+      }
+      preloadManager.clear();
+    };
+  }, []);
+
   // Execute transition between sequences
   const transitionToSequence = useCallback((targetSeqId: string) => {
     if (targetSeqId === currentSeqId || isTransitioning) return;
@@ -341,7 +362,7 @@ export const DedicatedExperiencePlayer: React.FC<DedicatedExperiencePlayerProps>
             ref={loopVideoRef}
             key={`loop-${currentSequence.id}`}
             src={currentSequence.videoUrl}
-            poster={currentSequence.posterUrl}
+            poster={currentSequence.posterUrl || undefined}
             autoPlay
             loop
             muted={isAudioMuted}
@@ -353,7 +374,7 @@ export const DedicatedExperiencePlayer: React.FC<DedicatedExperiencePlayerProps>
         )}
 
         {/* ۲. ویدیوی ترنزیشن سینمایی بین دو سکانس */}
-        {isTransitioning && activeTransition && (
+        {isTransitioning && activeTransition?.videoUrl && (
           <video
             ref={transVideoRef}
             key={`trans-${activeTransition.id}`}
